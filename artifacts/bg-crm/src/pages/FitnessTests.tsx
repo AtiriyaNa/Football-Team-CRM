@@ -1,10 +1,11 @@
 import { useEffect, useState, useCallback } from "react";
+import Papa from "papaparse";
 import { fetchSessions, createSession, fetchPlayers, bulkInsertResults } from "@/lib/queries";
 import { TableSkeleton } from "@/components/Skeleton";
 import { EmptyState } from "@/components/EmptyState";
 import { formatBroncho } from "@/lib/utils";
 import type { TestSession, Player, TestResult } from "@/lib/types";
-import { Dumbbell, Plus, Upload, CheckCircle2, AlertCircle } from "lucide-react";
+import { Dumbbell, Plus, CheckCircle2, AlertCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 type Step = "list" | "create-session" | "enter-data" | "preview" | "done";
@@ -27,33 +28,30 @@ interface MatchedRow {
   player: Player | null;
 }
 
-function parseNum(v: string | undefined): number | null {
-  if (!v || v.trim() === "") return null;
-  const n = parseFloat(v.trim());
+function parseNum(v: string | undefined | null): number | null {
+  if (!v || String(v).trim() === "") return null;
+  const n = parseFloat(String(v).trim());
   return isNaN(n) ? null : n;
 }
 
 function parseCsv(text: string): CsvRow[] {
-  const lines = text.trim().split("\n");
-  if (lines.length < 2) return [];
-  const headers = lines[0].split(",").map((h) => h.trim().toLowerCase());
-  return lines.slice(1).map((line) => {
-    const vals = line.split(",").map((v) => v.trim());
-    const obj: Record<string, string> = {};
-    headers.forEach((h, i) => { obj[h] = vals[i] ?? ""; });
-    return {
-      code: obj["code"] ?? "",
-      name: obj["name"] ?? "",
-      bronco_mins: parseNum(obj["bronco_mins"]) ?? undefined,
-      ten_m_1: parseNum(obj["ten_m_1"]) ?? undefined,
-      ten_m_2: parseNum(obj["ten_m_2"]) ?? undefined,
-      twenty_m_1: parseNum(obj["twenty_m_1"]) ?? undefined,
-      twenty_m_2: parseNum(obj["twenty_m_2"]) ?? undefined,
-      forty_m_1: parseNum(obj["forty_m_1"]) ?? undefined,
-      forty_m_2: parseNum(obj["forty_m_2"]) ?? undefined,
-      notes: obj["notes"] ?? undefined,
-    };
+  const result = Papa.parse<Record<string, string>>(text.trim(), {
+    header: true,
+    skipEmptyLines: true,
+    transformHeader: (h) => h.trim().toLowerCase(),
   });
+  return result.data.map((obj) => ({
+    code: obj["code"] ?? "",
+    name: obj["name"] ?? "",
+    bronco_mins: parseNum(obj["bronco_mins"]) ?? undefined,
+    ten_m_1: parseNum(obj["ten_m_1"]) ?? undefined,
+    ten_m_2: parseNum(obj["ten_m_2"]) ?? undefined,
+    twenty_m_1: parseNum(obj["twenty_m_1"]) ?? undefined,
+    twenty_m_2: parseNum(obj["twenty_m_2"]) ?? undefined,
+    forty_m_1: parseNum(obj["forty_m_1"]) ?? undefined,
+    forty_m_2: parseNum(obj["forty_m_2"]) ?? undefined,
+    notes: obj["notes"] ?? undefined,
+  }));
 }
 
 export default function FitnessTests() {
@@ -62,10 +60,9 @@ export default function FitnessTests() {
   const [loading, setLoading] = useState(true);
   const [step, setStep] = useState<Step>("list");
 
-  // New session state
+  // Session details (not saved until confirm)
   const [newDate, setNewDate] = useState(new Date().toISOString().split("T")[0]);
   const [newName, setNewName] = useState("");
-  const [newSession, setNewSession] = useState<TestSession | null>(null);
 
   // Data entry state
   const [csvText, setCsvText] = useState("");
@@ -87,20 +84,18 @@ export default function FitnessTests() {
 
   useEffect(() => { loadSessions(); }, [loadSessions]);
 
-  const handleCreateSession = async (e: React.FormEvent) => {
+  const handleGoToDataEntry = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newName.trim()) {
       toast({ title: "Session name is required", variant: "destructive" });
       return;
     }
     try {
-      const s = await createSession({ test_date: newDate, test_name: newName, notes: null });
-      setNewSession(s);
       const players = await fetchPlayers();
       setAllPlayers(players);
       setStep("enter-data");
     } catch (err: unknown) {
-      toast({ title: "Failed to create session", description: String(err), variant: "destructive" });
+      toast({ title: "Failed to load players", description: String(err), variant: "destructive" });
     }
   };
 
@@ -112,7 +107,9 @@ export default function FitnessTests() {
     }
     const matchedRows = rows.map((row) => {
       const player = allPlayers.find(
-        (p) => p.code.toLowerCase() === row.code.toLowerCase() || p.name.toLowerCase() === row.name.toLowerCase()
+        (p) =>
+          (row.code && p.code.toLowerCase() === row.code.toLowerCase()) ||
+          (row.name && p.name.toLowerCase() === row.name.toLowerCase())
       ) ?? null;
       return { row, player };
     });
@@ -120,14 +117,16 @@ export default function FitnessTests() {
     setStep("preview");
   };
 
+  // Session is created here, only when user confirms
   const handleConfirm = async () => {
-    if (!newSession) return;
     setSubmitting(true);
     try {
+      const session = await createSession({ test_date: newDate, test_name: newName, notes: null });
+
       const results: Omit<TestResult, "id" | "created_at">[] = matched
         .filter((m) => m.player !== null)
         .map((m) => ({
-          session_id: newSession.id,
+          session_id: session.id,
           player_id: m.player!.id,
           bronco_mins: m.row.bronco_mins ?? null,
           mas_ms: null,
@@ -147,7 +146,8 @@ export default function FitnessTests() {
       toast({ title: `Saved ${results.length} results` });
       await loadSessions();
       setStep("list");
-      setNewSession(null);
+      setNewName("");
+      setNewDate(new Date().toISOString().split("T")[0]);
       setCsvText("");
       setManualRows([{ code: "", name: "" }]);
     } catch (err: unknown) {
@@ -157,13 +157,21 @@ export default function FitnessTests() {
     }
   };
 
+  const handleCancel = () => {
+    setStep("list");
+    setNewName("");
+    setNewDate(new Date().toISOString().split("T")[0]);
+    setCsvText("");
+    setManualRows([{ code: "", name: "" }]);
+  };
+
   if (step === "create-session") {
     return (
       <div className="space-y-5 max-w-lg">
-        <button onClick={() => setStep("list")} className="text-sm text-muted-foreground hover:text-foreground">← Back</button>
+        <button onClick={handleCancel} className="text-sm text-muted-foreground hover:text-foreground">← Back</button>
         <div className="bg-card border border-border rounded-lg p-5">
           <h2 className="text-base font-semibold text-foreground mb-4">New Test Session</h2>
-          <form onSubmit={handleCreateSession} className="space-y-3">
+          <form onSubmit={handleGoToDataEntry} className="space-y-3">
             <div>
               <label className="block text-xs text-muted-foreground mb-1">Session Date</label>
               <input type="date" value={newDate} onChange={(e) => setNewDate(e.target.value)}
@@ -175,7 +183,7 @@ export default function FitnessTests() {
                 className="w-full bg-muted border border-border rounded px-3 py-1.5 text-sm text-foreground" data-testid="input-session-name" />
             </div>
             <div className="flex gap-2 pt-2">
-              <button type="button" onClick={() => setStep("list")} className="flex-1 px-4 py-2 border border-border rounded-md text-sm text-muted-foreground">Cancel</button>
+              <button type="button" onClick={handleCancel} className="flex-1 px-4 py-2 border border-border rounded-md text-sm text-muted-foreground">Cancel</button>
               <button type="submit" className="flex-1 px-4 py-2 bg-primary text-white rounded-md text-sm font-semibold" data-testid="button-create-session">Next →</button>
             </div>
           </form>
@@ -190,7 +198,7 @@ export default function FitnessTests() {
         <button onClick={() => setStep("create-session")} className="text-sm text-muted-foreground hover:text-foreground">← Back</button>
         <div className="bg-card border border-border rounded-lg p-5">
           <h2 className="text-base font-semibold text-foreground mb-1">Enter Results</h2>
-          <p className="text-xs text-muted-foreground mb-4">Session: {newSession?.test_name} — {newSession?.test_date}</p>
+          <p className="text-xs text-muted-foreground mb-4">Session: {newName} — {newDate}</p>
 
           <div className="flex gap-2 mb-4">
             <button onClick={() => setUseManual(false)} className={`text-sm px-3 py-1.5 rounded-md ${!useManual ? "bg-primary text-white" : "bg-muted text-muted-foreground"}`} data-testid="button-tab-csv">CSV Upload</button>
@@ -248,9 +256,10 @@ export default function FitnessTests() {
         <button onClick={() => setStep("enter-data")} className="text-sm text-muted-foreground hover:text-foreground">← Back</button>
         <div className="bg-card border border-border rounded-lg p-5">
           <h2 className="text-base font-semibold text-foreground mb-2">Preview Results</h2>
+          <p className="text-xs text-muted-foreground mb-3">Session will be created when you confirm below.</p>
           <div className="flex gap-4 mb-4 text-sm">
             <span className="text-emerald-400 flex items-center gap-1"><CheckCircle2 size={14} />{matchedCount} matched</span>
-            {unmatchedCount > 0 && <span className="text-red-400 flex items-center gap-1"><AlertCircle size={14} />{unmatchedCount} unmatched</span>}
+            {unmatchedCount > 0 && <span className="text-red-400 flex items-center gap-1"><AlertCircle size={14} />{unmatchedCount} unmatched (skipped)</span>}
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm" data-testid="preview-table">
@@ -293,7 +302,7 @@ export default function FitnessTests() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold text-foreground">Fitness Tests</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">{sessions.length} sessions</p>
+          <p className="text-sm text-muted-foreground mt-0.5">{sessions.length} session{sessions.length !== 1 ? "s" : ""}</p>
         </div>
         <button
           onClick={() => setStep("create-session")}
