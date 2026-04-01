@@ -51,6 +51,15 @@ export async function fetchResultsBySession(sessionId: string): Promise<TestResu
   return data as TestResult[];
 }
 
+export async function fetchResultsBySessionWithPlayers(sessionId: string): Promise<(TestResult & { players: Player })[]> {
+  const { data, error } = await supabase
+    .from("test_results")
+    .select("*, players(*)")
+    .eq("session_id", sessionId);
+  if (error) throw error;
+  return data as (TestResult & { players: Player })[];
+}
+
 export async function fetchResultsByPlayer(playerId: string): Promise<TestResult[]> {
   const { data, error } = await supabase
     .from("test_results")

@@ -1,14 +1,15 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import Papa from "papaparse";
-import { fetchSessions, createSession, fetchPlayers, bulkInsertResults } from "@/lib/queries";
+import { fetchSessions, createSession, fetchPlayers, bulkInsertResults, fetchResultsBySessionWithPlayers } from "@/lib/queries";
 import { TableSkeleton } from "@/components/Skeleton";
 import { EmptyState } from "@/components/EmptyState";
 import { formatBroncho } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 import type { TestSession, Player, TestResult } from "@/lib/types";
-import { Dumbbell, Plus, CheckCircle2, AlertCircle } from "lucide-react";
+import { Dumbbell, Plus, CheckCircle2, AlertCircle, ChevronRight } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
-type Step = "list" | "create-session" | "enter-data" | "preview" | "done";
+type Step = "list" | "session-detail" | "create-session" | "enter-data" | "preview" | "done";
 
 interface CsvRow {
   code: string;
@@ -26,6 +27,18 @@ interface CsvRow {
 interface MatchedRow {
   row: CsvRow;
   player: Player | null;
+}
+
+type EnrichedResult = TestResult & { players: Player };
+
+const POS_CFG: Record<string, { text: string; bg: string }> = {
+  F:  { text: "text-red-400",    bg: "bg-red-400/15"    },
+  M:  { text: "text-blue-400",   bg: "bg-blue-400/15"   },
+  D:  { text: "text-indigo-400", bg: "bg-indigo-400/15" },
+  GK: { text: "text-amber-400",  bg: "bg-amber-400/15"  },
+};
+function getPos(pos: string | null) {
+  return POS_CFG[pos ?? ""] ?? { text: "text-slate-400", bg: "bg-slate-400/15" };
 }
 
 function parseNum(v: string | undefined | null): number | null {
@@ -54,13 +67,240 @@ function parseCsv(text: string): CsvRow[] {
   }));
 }
 
+// ── Session detail view ────────────────────────────────────────────────────
+function SessionDetail({
+  session,
+  onBack,
+}: {
+  session: TestSession;
+  onBack: () => void;
+}) {
+  const [results, setResults] = useState<EnrichedResult[]>([]);
+  const [allPlayers, setAllPlayers] = useState<Player[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    Promise.all([fetchResultsBySessionWithPlayers(session.id), fetchPlayers()])
+      .then(([rs, ps]) => {
+        setResults(rs);
+        setAllPlayers(ps);
+      })
+      .finally(() => setLoading(false));
+  }, [session.id]);
+
+  // Participants: only those with a bronco result, sorted best (lowest) first
+  const participants = useMemo(() => {
+    return [...results]
+      .filter((r) => r.bronco_mins !== null)
+      .sort((a, b) => a.bronco_mins! - b.bronco_mins!);
+  }, [results]);
+
+  // All results (any metric), for "attended but no bronco" detection
+  const participantIds = useMemo(() => new Set(results.map((r) => r.player_id)), [results]);
+
+  // Absentees: active players with no result at all in this session
+  const absentees = useMemo(() => {
+    return allPlayers.filter((p) => p.is_active && !participantIds.has(p.id));
+  }, [allPlayers, participantIds]);
+
+  const avg = participants.length
+    ? participants.reduce((s, r) => s + r.bronco_mins!, 0) / participants.length
+    : null;
+
+  const best = participants[0] ?? null;
+  const worst = participants[participants.length - 1] ?? null;
+
+  // Bar width for relative score display (best = 100%, worst = proportional)
+  const maxBronco = worst?.bronco_mins ?? 1;
+  const minBronco = best?.bronco_mins ?? 0;
+  const range = maxBronco - minBronco || 1;
+
+  if (loading) {
+    return (
+      <div className="space-y-5">
+        <button onClick={onBack} className="text-sm text-muted-foreground hover:text-foreground">← Fitness Tests</button>
+        <div className="h-48 bg-card border border-border rounded-2xl animate-pulse" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-5">
+      <button onClick={onBack} className="text-sm text-muted-foreground hover:text-foreground">← Fitness Tests</button>
+
+      {/* Session header */}
+      <div>
+        <div className="flex items-center gap-2.5 flex-wrap">
+          <h1 className="text-3xl font-serif font-normal tracking-tight text-foreground">{session.test_name}</h1>
+          {session.type && (
+            <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-medium bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+              {session.type}
+            </span>
+          )}
+        </div>
+        <p className="text-sm text-muted-foreground mt-1">{session.test_date}{session.notes ? ` · ${session.notes}` : ""}</p>
+      </div>
+
+      {/* Metric strip */}
+      <div className="grid grid-cols-2 sm:grid-cols-5 border border-border rounded-2xl overflow-hidden divide-x divide-y sm:divide-y-0 divide-border bg-card">
+        {[
+          { label: "Tested",   value: participants.length,        sub: "with bronco score" },
+          { label: "Absent",   value: absentees.length,           sub: "no result recorded" },
+          { label: "Best",     value: formatBroncho(best?.bronco_mins ?? null),  sub: best?.players.name ?? "—" },
+          { label: "Slowest",  value: formatBroncho(worst?.bronco_mins ?? null), sub: worst?.players.name ?? "—" },
+          { label: "Avg",      value: formatBroncho(avg),         sub: "team average" },
+        ].map(({ label, value, sub }) => (
+          <div key={label} className="py-4 px-5">
+            <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-1.5">{label}</div>
+            <div className="text-2xl font-bold font-time leading-none text-foreground">{value}</div>
+            <div className="text-[11px] text-muted-foreground mt-1 truncate">{sub}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Participant cards */}
+      {participants.length > 0 && (
+        <div className="space-y-2">
+          <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+            Participants — {participants.length} tested
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+            {participants.map((r, idx) => {
+              const isFirst = idx === 0;
+              const isLast = idx === participants.length - 1 && participants.length > 1;
+              const pos = getPos(r.players.primary_position);
+              const barPct = maxBronco === minBronco ? 100 : Math.round(100 - ((r.bronco_mins! - minBronco) / range) * 80);
+
+              return (
+                <div
+                  key={r.id}
+                  className={cn(
+                    "bg-card border rounded-xl p-4 flex flex-col gap-2.5",
+                    isFirst
+                      ? "border-emerald-500/40 bg-emerald-500/5"
+                      : isLast
+                      ? "border-red-500/30 bg-red-500/5"
+                      : "border-border"
+                  )}
+                >
+                  {/* Top row: rank + label + name */}
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-2.5">
+                      <span className={cn(
+                        "flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold font-time",
+                        isFirst ? "bg-emerald-500/20 text-emerald-400"
+                          : isLast ? "bg-red-500/15 text-red-400"
+                          : "bg-muted text-muted-foreground"
+                      )}>
+                        {idx + 1}
+                      </span>
+                      <div>
+                        <div className="font-semibold text-sm text-foreground leading-tight">{r.players.name}</div>
+                        <div className="font-time text-[10px] text-muted-foreground">{r.players.code}</div>
+                      </div>
+                    </div>
+                    <div className="flex flex-col items-end gap-1">
+                      <span className={cn("inline-flex items-center justify-center w-7 h-7 rounded-md text-[10px] font-bold font-time", pos.text, pos.bg)}>
+                        {r.players.primary_position || "?"}
+                      </span>
+                      {r.players.age_range && (
+                        <span className="text-[10px] text-muted-foreground font-time">{r.players.age_range}</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Time + bar */}
+                  <div>
+                    <div className={cn(
+                      "text-2xl font-bold font-time leading-none mb-1.5",
+                      isFirst ? "text-emerald-400" : isLast ? "text-red-400" : "text-foreground"
+                    )}>
+                      {formatBroncho(r.bronco_mins)}
+                    </div>
+                    <div className="h-1 rounded-full bg-muted overflow-hidden">
+                      <div
+                        className={cn("h-full rounded-full transition-all duration-500",
+                          isFirst ? "bg-emerald-400" : isLast ? "bg-red-400" : "bg-indigo-400"
+                        )}
+                        style={{ width: `${barPct}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Sprint times if present */}
+                  {(r.ten_m_1 !== null || r.twenty_m_1 !== null || r.forty_m_1 !== null) && (
+                    <div className="flex gap-3 pt-0.5">
+                      {r.ten_m_1 !== null && <span className="text-[11px] text-muted-foreground font-time">10m: {r.ten_m_1.toFixed(2)}s</span>}
+                      {r.twenty_m_1 !== null && <span className="text-[11px] text-muted-foreground font-time">20m: {r.twenty_m_1.toFixed(2)}s</span>}
+                      {r.forty_m_1 !== null && <span className="text-[11px] text-muted-foreground font-time">40m: {r.forty_m_1.toFixed(2)}s</span>}
+                    </div>
+                  )}
+
+                  {/* Label tag */}
+                  {(isFirst || isLast) && (
+                    <div className={cn(
+                      "text-[10px] font-semibold uppercase tracking-widest",
+                      isFirst ? "text-emerald-500" : "text-red-400/70"
+                    )}>
+                      {isFirst ? "Best time" : "Slowest"}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Players with results but no bronco (edge case) */}
+      {results.length > participants.length && (
+        <div className="text-xs text-muted-foreground">
+          {results.length - participants.length} player{results.length - participants.length !== 1 ? "s" : ""} attended but have no Broncho score recorded.
+        </div>
+      )}
+
+      {/* Absent players */}
+      {absentees.length > 0 && (
+        <div className="space-y-2">
+          <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+            Absent — {absentees.length} not tested
+          </div>
+          <div className="bg-card border border-border rounded-xl p-4">
+            <div className="flex flex-wrap gap-2">
+              {absentees.map((p) => {
+                const pos = getPos(p.primary_position);
+                return (
+                  <div key={p.id} className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-muted/60 border border-border/50">
+                    <span className={cn("text-[10px] font-bold font-time", pos.text)}>{p.primary_position || "?"}</span>
+                    <span className="text-sm text-foreground">{p.name}</span>
+                    <span className="text-[10px] text-muted-foreground font-time">{p.code}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {participants.length === 0 && results.length === 0 && (
+        <EmptyState icon={Dumbbell} title="No results recorded" description="This session has no test results yet." />
+      )}
+    </div>
+  );
+}
+
+// ── Main component ─────────────────────────────────────────────────────────
 export default function FitnessTests() {
   const { toast } = useToast();
   const [sessions, setSessions] = useState<TestSession[]>([]);
   const [loading, setLoading] = useState(true);
   const [step, setStep] = useState<Step>("list");
 
-  // Session details (not saved until confirm)
+  // Session detail
+  const [selectedSession, setSelectedSession] = useState<TestSession | null>(null);
+
+  // New session details (not saved until confirm)
   const [newDate, setNewDate] = useState(new Date().toISOString().split("T")[0]);
   const [newName, setNewName] = useState("");
   const [newType, setNewType] = useState("");
@@ -84,6 +324,11 @@ export default function FitnessTests() {
   }, []);
 
   useEffect(() => { loadSessions(); }, [loadSessions]);
+
+  const handleOpenSession = (s: TestSession) => {
+    setSelectedSession(s);
+    setStep("session-detail");
+  };
 
   const handleGoToDataEntry = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -118,12 +363,10 @@ export default function FitnessTests() {
     setStep("preview");
   };
 
-  // Session is created here, only when user confirms
   const handleConfirm = async () => {
     setSubmitting(true);
     try {
       const session = await createSession({ test_date: newDate, test_name: newName, type: newType.trim() || null, notes: null });
-
       const results: Omit<TestResult, "id" | "created_at">[] = matched
         .filter((m) => m.player !== null)
         .map((m) => ({
@@ -168,6 +411,12 @@ export default function FitnessTests() {
     setManualRows([{ code: "", name: "" }]);
   };
 
+  // ── Session detail ───────────────────────────────────────────────────────
+  if (step === "session-detail" && selectedSession) {
+    return <SessionDetail session={selectedSession} onBack={() => setStep("list")} />;
+  }
+
+  // ── Create session ───────────────────────────────────────────────────────
   if (step === "create-session") {
     return (
       <div className="space-y-5 max-w-lg">
@@ -201,6 +450,7 @@ export default function FitnessTests() {
     );
   }
 
+  // ── Enter data ───────────────────────────────────────────────────────────
   if (step === "enter-data") {
     return (
       <div className="space-y-5 max-w-2xl">
@@ -257,6 +507,7 @@ export default function FitnessTests() {
     );
   }
 
+  // ── Preview ──────────────────────────────────────────────────────────────
   if (step === "preview") {
     const matchedCount = matched.filter((m) => m.player).length;
     const unmatchedCount = matched.filter((m) => !m.player).length;
@@ -305,13 +556,13 @@ export default function FitnessTests() {
     );
   }
 
-  // List view
+  // ── List view ────────────────────────────────────────────────────────────
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-serif font-normal tracking-tight text-foreground">Fitness <em className="italic text-indigo-500 dark:text-indigo-400 not-italic font-serif">Tests</em></h1>
-          <p className="text-sm text-slate-500 dark:text-slate-600 mt-1">{sessions.length} session{sessions.length !== 1 ? "s" : ""}</p>
+          <p className="text-sm text-muted-foreground mt-1">{sessions.length} session{sessions.length !== 1 ? "s" : ""}</p>
         </div>
         <button
           onClick={() => setStep("create-session")}
@@ -339,11 +590,17 @@ export default function FitnessTests() {
                   <th className="px-4 py-2.5 text-left font-medium">Session Name</th>
                   <th className="px-4 py-2.5 text-left font-medium">Type</th>
                   <th className="px-4 py-2.5 text-left font-medium">Notes</th>
+                  <th className="px-4 py-2.5" />
                 </tr>
               </thead>
               <tbody>
                 {sessions.map((s) => (
-                  <tr key={s.id} className="border-b border-border/50 hover:bg-muted/30" data-testid={`row-session-${s.id}`}>
+                  <tr
+                    key={s.id}
+                    onClick={() => handleOpenSession(s)}
+                    className="border-b border-border/50 hover:bg-muted/40 cursor-pointer transition-colors"
+                    data-testid={`row-session-${s.id}`}
+                  >
                     <td className="px-4 py-3 font-time text-muted-foreground text-xs">{s.test_date}</td>
                     <td className="px-4 py-3 font-medium text-foreground">{s.test_name}</td>
                     <td className="px-4 py-3">
@@ -356,6 +613,7 @@ export default function FitnessTests() {
                       )}
                     </td>
                     <td className="px-4 py-3 text-muted-foreground text-xs">{s.notes ?? "—"}</td>
+                    <td className="px-4 py-3 text-muted-foreground"><ChevronRight size={14} /></td>
                   </tr>
                 ))}
               </tbody>
