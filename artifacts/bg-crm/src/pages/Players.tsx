@@ -132,7 +132,7 @@ function AddPlayerModal({ onClose, onSaved }: { onClose: () => void; onSaved: ()
             <button
               type="submit"
               disabled={saving}
-              className="flex-1 px-4 py-2 text-sm rounded-md bg-primary text-white font-semibold hover:bg-primary/90 transition-colors disabled:opacity-60"
+              className="flex-1 px-4 py-2 text-sm rounded-xl btn-primary text-white font-semibold disabled:opacity-60"
               data-testid="button-submit-player"
             >
               {saving ? "Saving…" : "Add Player"}
@@ -179,14 +179,14 @@ export default function Players() {
     <div className="space-y-5">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-xl font-bold text-foreground">{team} — Players</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">{players.filter((p) => p.is_active).length} active</p>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-100">{team} <span className="text-slate-500 font-normal">— Players</span></h1>
+          <p className="text-sm text-slate-600 mt-1">{players.filter((p) => p.is_active).length} active players</p>
         </div>
         <div className="flex items-center gap-2">
           <TeamSwitcher />
           <button
             onClick={() => setShowAdd(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-white text-sm font-semibold rounded-md hover:bg-primary/90 transition-colors"
+            className="flex items-center gap-1.5 px-4 py-2 btn-primary text-white text-sm font-semibold rounded-xl"
             data-testid="button-add-player"
           >
             <Plus size={14} />
@@ -239,7 +239,7 @@ export default function Players() {
       </div>
 
       {/* Table */}
-      <div className="bg-card border border-border rounded-lg overflow-hidden">
+      <div className="bg-card border border-border rounded-2xl overflow-hidden">
         {loading ? (
           <div className="p-4"><TableSkeleton rows={8} cols={5} /></div>
         ) : filtered.length === 0 ? (

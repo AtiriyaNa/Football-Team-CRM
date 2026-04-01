@@ -79,8 +79,8 @@ export default function PlayerDetail() {
           <Skeleton className="h-4 w-32" />
           <Skeleton className="h-4 w-64" />
         </div>
-        <div className="bg-card border border-border rounded-lg p-4"><ChartSkeleton /></div>
-        <div className="bg-card border border-border rounded-lg p-4"><TableSkeleton /></div>
+        <div className="bg-card border border-border rounded-2xl p-5"><ChartSkeleton /></div>
+        <div className="bg-card border border-border rounded-2xl p-5"><TableSkeleton /></div>
       </div>
     );
   }
@@ -110,7 +110,7 @@ export default function PlayerDetail() {
                 data-testid="input-edit-name"
               />
             ) : (
-              <h1 className="text-xl font-bold text-foreground">{player.name}</h1>
+              <h1 className="text-2xl font-bold tracking-tight text-slate-100">{player.name}</h1>
             )}
             <div className="flex items-center gap-3 mt-1">
               <span className="font-time text-xs text-muted-foreground">{player.code}</span>
@@ -126,7 +126,7 @@ export default function PlayerDetail() {
             {editing ? (
               <>
                 <button onClick={cancelEdit} className="flex items-center gap-1 px-3 py-1.5 text-sm border border-border rounded-md text-muted-foreground hover:text-foreground" data-testid="button-cancel-edit"><X size={13} />Cancel</button>
-                <button onClick={saveEdit} disabled={saving} className="flex items-center gap-1 px-3 py-1.5 text-sm bg-primary text-white rounded-md font-semibold hover:bg-primary/90 disabled:opacity-60" data-testid="button-save-edit"><Save size={13} />{saving ? "Saving…" : "Save"}</button>
+                <button onClick={saveEdit} disabled={saving} className="flex items-center gap-1 px-3 py-1.5 text-sm btn-primary text-white rounded-xl font-semibold disabled:opacity-60" data-testid="button-save-edit"><Save size={13} />{saving ? "Saving…" : "Save"}</button>
               </>
             ) : (
               <button onClick={startEdit} className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-border rounded-md text-muted-foreground hover:text-foreground transition-colors" data-testid="button-edit-player"><Edit size={13} />Edit</button>
@@ -187,7 +187,7 @@ export default function PlayerDetail() {
       </div>
 
       {/* Broncho over time chart */}
-      <div className="bg-card border border-border rounded-lg p-4">
+      <div className="bg-card border border-border rounded-2xl p-5">
         <h2 className="text-sm font-semibold text-foreground mb-4">Broncho Over Time</h2>
         {chartData.length === 0 ? (
           <EmptyState icon={Timer} title="No test history" description="This player hasn't been tested yet" />

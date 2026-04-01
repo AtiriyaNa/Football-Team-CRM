@@ -15,17 +15,22 @@ interface LatestData {
   results: (TestResult & { players: Pick<Player, "name" | "code" | "team"> })[];
 }
 
-function MetricCard({ title, value, sub, icon: Icon, highlight }: { title: string; value: string | number; sub?: string; icon: React.ElementType; highlight?: boolean }) {
+function MetricCard({ title, value, sub, icon: Icon, highlight, accent }: { title: string; value: string | number; sub?: string; icon: React.ElementType; highlight?: boolean; accent?: string }) {
   return (
-    <div className="bg-card border border-border rounded-lg p-4">
-      <div className="flex items-center justify-between mb-3">
-        <span className="text-xs text-muted-foreground uppercase tracking-wider">{title}</span>
-        <div className="w-7 h-7 rounded bg-muted flex items-center justify-center">
-          <Icon size={14} className="text-muted-foreground" />
+    <div className={`bg-card border border-border rounded-2xl p-5 card-hover relative overflow-hidden`}>
+      {highlight && (
+        <div className="absolute inset-0 bg-gradient-to-br from-violet-600/8 to-transparent pointer-events-none" />
+      )}
+      <div className="flex items-start justify-between mb-4">
+        <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-[0.12em]">{title}</span>
+        <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${highlight ? "bg-violet-500/20" : "bg-white/[0.05]"}`}>
+          <Icon size={15} className={highlight ? "text-violet-400" : "text-slate-500"} />
         </div>
       </div>
-      <div className={`text-2xl font-bold font-time ${highlight ? "text-yellow-400" : "text-foreground"}`}>{value}</div>
-      {sub && <div className="text-xs text-muted-foreground mt-1">{sub}</div>}
+      <div className={`text-3xl font-bold tracking-tight ${highlight ? "text-violet-300" : "text-slate-100"}`} style={{ fontFamily: "Outfit, sans-serif" }}>
+        {value}
+      </div>
+      {sub && <div className="text-[11px] text-slate-600 mt-1.5 font-medium">{sub}</div>}
     </div>
   );
 }
@@ -87,16 +92,16 @@ export default function Dashboard() {
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-xl font-bold text-foreground">{team} — Dashboard</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            {latestSession ? `Latest session: ${latestSession.test_name} (${latestSession.test_date})` : "No sessions recorded yet"}
+          <h1 className="text-2xl font-bold tracking-tight text-slate-100">{team} <span className="text-slate-500 font-normal">— Dashboard</span></h1>
+          <p className="text-sm text-slate-600 mt-1">
+            {latestSession ? `Latest: ${latestSession.test_name} · ${latestSession.test_date}` : "No sessions recorded yet"}
           </p>
         </div>
         <TeamSwitcher />
       </div>
 
       {/* Metric cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {loading ? (
           Array.from({ length: 4 }).map((_, i) => <MetricCardSkeleton key={i} />)
         ) : (
@@ -127,8 +132,8 @@ export default function Dashboard() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Broncho over time */}
-        <div className="bg-card border border-border rounded-lg p-4">
-          <h2 className="text-sm font-semibold text-foreground mb-4">Team Avg Broncho Over Time</h2>
+        <div className="bg-card border border-border rounded-2xl p-5">
+          <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-[0.12em] mb-5">Team Avg Broncho Over Time</h2>
           {loading ? (
             <ChartSkeleton height={200} />
           ) : chartData.length === 0 ? (
@@ -136,27 +141,30 @@ export default function Dashboard() {
           ) : (
             <ResponsiveContainer width="100%" height={200}>
               <LineChart data={chartData} margin={{ top: 4, right: 8, bottom: 4, left: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#222" />
-                <XAxis dataKey="date" tick={{ fill: "#9CA3AF", fontSize: 11 }} />
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
+                <XAxis dataKey="date" tick={{ fill: "#475569", fontSize: 11 }} axisLine={false} tickLine={false} />
                 <YAxis
-                  tick={{ fill: "#9CA3AF", fontSize: 11 }}
+                  tick={{ fill: "#475569", fontSize: 11 }}
                   tickFormatter={(v) => formatBroncho(v)}
                   domain={["auto", "auto"]}
+                  axisLine={false}
+                  tickLine={false}
                 />
                 <Tooltip
-                  contentStyle={{ background: "#111", border: "1px solid #222", borderRadius: 6 }}
-                  labelStyle={{ color: "#fff", fontSize: 12 }}
+                  contentStyle={{ background: "rgba(10,15,36,0.95)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 12, backdropFilter: "blur(12px)" }}
+                  labelStyle={{ color: "#94a3b8", fontSize: 11 }}
+                  itemStyle={{ color: "#a78bfa" }}
                   formatter={(v: number) => [formatBroncho(v), "Avg Broncho"]}
                 />
-                <Line type="monotone" dataKey="mins" stroke="#4F46E5" strokeWidth={2} dot={{ fill: "#4F46E5", r: 4 }} />
+                <Line type="monotone" dataKey="mins" stroke="#8b5cf6" strokeWidth={2.5} dot={{ fill: "#8b5cf6", r: 4, strokeWidth: 2, stroke: "rgba(139,92,246,0.3)" }} activeDot={{ r: 6, fill: "#8b5cf6" }} />
               </LineChart>
             </ResponsiveContainer>
           )}
         </div>
 
         {/* MAS tier distribution */}
-        <div className="bg-card border border-border rounded-lg p-4">
-          <h2 className="text-sm font-semibold text-foreground mb-4">MAS Tier Distribution</h2>
+        <div className="bg-card border border-border rounded-2xl p-5">
+          <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-[0.12em] mb-5">MAS Tier Distribution</h2>
           {loading ? (
             <ChartSkeleton height={200} />
           ) : tierCounts.length === 0 ? (
@@ -164,15 +172,15 @@ export default function Dashboard() {
           ) : (
             <ResponsiveContainer width="100%" height={200}>
               <BarChart data={tierCounts} margin={{ top: 4, right: 8, bottom: 4, left: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#222" />
-                <XAxis dataKey="tier" tick={{ fill: "#9CA3AF", fontSize: 10 }} />
-                <YAxis allowDecimals={false} tick={{ fill: "#9CA3AF", fontSize: 11 }} />
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
+                <XAxis dataKey="tier" tick={{ fill: "#475569", fontSize: 10 }} axisLine={false} tickLine={false} />
+                <YAxis allowDecimals={false} tick={{ fill: "#475569", fontSize: 11 }} axisLine={false} tickLine={false} />
                 <Tooltip
-                  contentStyle={{ background: "#111", border: "1px solid #222", borderRadius: 6 }}
-                  labelStyle={{ color: "#fff", fontSize: 12 }}
+                  contentStyle={{ background: "rgba(10,15,36,0.95)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 12, backdropFilter: "blur(12px)" }}
+                  labelStyle={{ color: "#94a3b8", fontSize: 11 }}
                   formatter={(v: number) => [v, "Players"]}
                 />
-                <Bar dataKey="count" radius={[3, 3, 0, 0]}>
+                <Bar dataKey="count" radius={[6, 6, 0, 0]}>
                   {tierCounts.map((entry, i) => (
                     <Cell key={i} fill={entry.color} />
                   ))}
@@ -185,10 +193,10 @@ export default function Dashboard() {
 
       {/* Latest session results */}
       {latestSession && (
-        <div className="bg-card border border-border rounded-lg">
-          <div className="px-4 py-3 border-b border-border flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-foreground">Latest Session: {latestSession.test_name}</h2>
-            <span className="text-xs text-muted-foreground">{latestResults.length} results</span>
+        <div className="bg-card border border-border rounded-2xl overflow-hidden">
+          <div className="px-5 py-4 border-b border-border flex items-center justify-between">
+            <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-[0.12em]">Latest Session: {latestSession.test_name}</h2>
+            <span className="text-xs text-slate-600 bg-white/[0.04] px-2 py-0.5 rounded-full">{latestResults.length} results</span>
           </div>
           {loading ? (
             <div className="p-4"><ChartSkeleton height={120} /></div>

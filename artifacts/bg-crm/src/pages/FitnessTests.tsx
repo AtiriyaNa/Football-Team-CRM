@@ -184,7 +184,7 @@ export default function FitnessTests() {
             </div>
             <div className="flex gap-2 pt-2">
               <button type="button" onClick={handleCancel} className="flex-1 px-4 py-2 border border-border rounded-md text-sm text-muted-foreground">Cancel</button>
-              <button type="submit" className="flex-1 px-4 py-2 bg-primary text-white rounded-md text-sm font-semibold" data-testid="button-create-session">Next →</button>
+              <button type="submit" className="flex-1 px-4 py-2 btn-primary text-white rounded-xl text-sm font-semibold" data-testid="button-create-session">Next →</button>
             </div>
           </form>
         </div>
@@ -201,8 +201,8 @@ export default function FitnessTests() {
           <p className="text-xs text-muted-foreground mb-4">Session: {newName} — {newDate}</p>
 
           <div className="flex gap-2 mb-4">
-            <button onClick={() => setUseManual(false)} className={`text-sm px-3 py-1.5 rounded-md ${!useManual ? "bg-primary text-white" : "bg-muted text-muted-foreground"}`} data-testid="button-tab-csv">CSV Upload</button>
-            <button onClick={() => setUseManual(true)} className={`text-sm px-3 py-1.5 rounded-md ${useManual ? "bg-primary text-white" : "bg-muted text-muted-foreground"}`} data-testid="button-tab-manual">Manual Entry</button>
+            <button onClick={() => setUseManual(false)} className={`text-sm px-3.5 py-1.5 rounded-lg font-medium transition-all ${!useManual ? "bg-violet-600/30 text-violet-300 border border-violet-500/30" : "text-slate-500 hover:text-slate-300"}`} data-testid="button-tab-csv">CSV Upload</button>
+            <button onClick={() => setUseManual(true)} className={`text-sm px-3.5 py-1.5 rounded-lg font-medium transition-all ${useManual ? "bg-violet-600/30 text-violet-300 border border-violet-500/30" : "text-slate-500 hover:text-slate-300"}`} data-testid="button-tab-manual">Manual Entry</button>
           </div>
 
           {!useManual ? (
@@ -241,7 +241,7 @@ export default function FitnessTests() {
 
           <div className="flex gap-2 pt-4">
             <button type="button" onClick={() => setStep("create-session")} className="flex-1 px-4 py-2 border border-border rounded-md text-sm text-muted-foreground">Back</button>
-            <button onClick={handlePreview} className="flex-1 px-4 py-2 bg-primary text-white rounded-md text-sm font-semibold" data-testid="button-preview">Preview →</button>
+            <button onClick={handlePreview} className="flex-1 px-4 py-2 btn-primary text-white rounded-xl text-sm font-semibold" data-testid="button-preview">Preview →</button>
           </div>
         </div>
       </div>
@@ -287,7 +287,7 @@ export default function FitnessTests() {
           </div>
           <div className="flex gap-2 pt-4">
             <button onClick={() => setStep("enter-data")} className="flex-1 px-4 py-2 border border-border rounded-md text-sm text-muted-foreground">Back</button>
-            <button onClick={handleConfirm} disabled={submitting || matchedCount === 0} className="flex-1 px-4 py-2 bg-primary text-white rounded-md text-sm font-semibold disabled:opacity-60" data-testid="button-confirm-save">
+            <button onClick={handleConfirm} disabled={submitting || matchedCount === 0} className="flex-1 px-4 py-2 btn-primary text-white rounded-xl text-sm font-semibold disabled:opacity-60" data-testid="button-confirm-save">
               {submitting ? "Saving…" : `Save ${matchedCount} Results`}
             </button>
           </div>
@@ -301,12 +301,12 @@ export default function FitnessTests() {
     <div className="space-y-5">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold text-foreground">Fitness Tests</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">{sessions.length} session{sessions.length !== 1 ? "s" : ""}</p>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-100">Fitness Tests</h1>
+          <p className="text-sm text-slate-600 mt-1">{sessions.length} session{sessions.length !== 1 ? "s" : ""}</p>
         </div>
         <button
           onClick={() => setStep("create-session")}
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-white text-sm font-semibold rounded-md hover:bg-primary/90 transition-colors"
+          className="flex items-center gap-1.5 px-4 py-2 btn-primary text-white text-sm font-semibold rounded-xl"
           data-testid="button-new-session"
         >
           <Plus size={14} />
@@ -314,12 +314,12 @@ export default function FitnessTests() {
         </button>
       </div>
 
-      <div className="bg-card border border-border rounded-lg">
+      <div className="bg-card border border-border rounded-2xl overflow-hidden">
         {loading ? (
           <div className="p-4"><TableSkeleton rows={5} cols={4} /></div>
         ) : sessions.length === 0 ? (
           <EmptyState icon={Dumbbell} title="No sessions yet" description="Create a new test session to get started" action={
-            <button onClick={() => setStep("create-session")} className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-white text-sm font-semibold rounded-md" data-testid="button-new-session-empty"><Plus size={14} />New Session</button>
+            <button onClick={() => setStep("create-session")} className="flex items-center gap-1.5 px-4 py-2 btn-primary text-white text-sm font-semibold rounded-xl" data-testid="button-new-session-empty"><Plus size={14} />New Session</button>
           } />
         ) : (
           <div className="overflow-x-auto">

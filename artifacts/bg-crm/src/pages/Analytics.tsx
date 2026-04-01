@@ -128,7 +128,7 @@ export default function Analytics() {
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <h1 className="text-xl font-bold text-foreground">Analytics</h1>
+        <h1 className="text-2xl font-bold tracking-tight text-slate-100">Analytics <span className="text-slate-500 font-normal">— {team}</span></h1>
         <TeamSwitcher />
       </div>
 
@@ -148,7 +148,7 @@ export default function Analytics() {
 
       {tab === "progress" && (
         <div className="space-y-4">
-          <div className="bg-card border border-border rounded-lg p-4">
+          <div className="bg-card border border-border rounded-2xl p-5">
             <h2 className="text-sm font-semibold text-foreground mb-4">Team Avg Broncho Over Time</h2>
             {loading ? <ChartSkeleton /> : progressData.length === 0 ? (
               <EmptyState icon={TrendingUp} title="No data" description="Record fitness tests to see progress" />
@@ -207,7 +207,7 @@ export default function Analytics() {
 
       {tab === "position" && (
         <div className="space-y-4">
-          <div className="bg-card border border-border rounded-lg p-4">
+          <div className="bg-card border border-border rounded-2xl p-5">
             <h2 className="text-sm font-semibold text-foreground mb-4">Avg Broncho by Position</h2>
             {loading ? <ChartSkeleton /> : positionData.length === 0 ? (
               <EmptyState icon={BarChart3} title="No data" description="No position data available" />
@@ -254,7 +254,7 @@ export default function Analytics() {
 
       {tab === "age" && (
         <div className="space-y-4">
-          <div className="bg-card border border-border rounded-lg p-4">
+          <div className="bg-card border border-border rounded-2xl p-5">
             <h2 className="text-sm font-semibold text-foreground mb-4">Avg Broncho by Age Group</h2>
             {loading ? <ChartSkeleton /> : (
               <ResponsiveContainer width="100%" height={240}>
@@ -299,7 +299,7 @@ export default function Analytics() {
 
       {tab === "benchmarks" && (
         <div className="space-y-4">
-          <div className="bg-card border border-border rounded-lg p-4">
+          <div className="bg-card border border-border rounded-2xl p-5">
             <h2 className="text-sm font-semibold text-foreground mb-4">Player MAS Benchmarks</h2>
             {loading ? <ChartSkeleton height={300} /> : benchmarkData.length === 0 ? (
               <EmptyState icon={Target} title="No MAS data" description="MAS scores will appear after fitness tests are recorded" />
