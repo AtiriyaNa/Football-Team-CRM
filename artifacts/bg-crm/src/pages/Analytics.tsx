@@ -233,8 +233,8 @@ export default function Analytics() {
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3 mb-5">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">
-            Analytics <span className="text-muted-foreground font-normal">— {team}</span>
+          <h1 className="text-3xl font-serif font-normal tracking-tight text-foreground">
+            Analytics <em className="italic text-indigo-500 dark:text-indigo-400 not-italic font-serif">— {team}</em>
           </h1>
           {latestSession && (
             <p className="text-sm text-muted-foreground mt-0.5">Latest: {latestSession.test_name} · {latestSession.test_date}</p>

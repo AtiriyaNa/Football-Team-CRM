@@ -89,8 +89,8 @@ export default function Dashboard() {
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-800 dark:text-slate-100">{team} <span className="text-slate-400 dark:text-slate-500 font-normal">— Dashboard</span></h1>
-          <p className="text-sm text-slate-500 dark:text-slate-600 mt-1">
+          <h1 className="text-3xl font-serif font-normal tracking-tight text-foreground">{team} <em className="italic text-indigo-500 dark:text-indigo-400 not-italic font-serif">— Dashboard</em></h1>
+          <p className="text-sm text-muted-foreground mt-1">
             {latestSession ? `Latest: ${latestSession.test_name} · ${latestSession.test_date}` : "No sessions recorded yet"}
           </p>
         </div>

@@ -76,8 +76,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
               <div className={cn("text-[10px] font-semibold uppercase tracking-[0.14em] truncate", isDark ? "text-slate-500" : "text-slate-400")}>
                 Bombay Gymkhana
               </div>
-              <div className={cn("text-sm font-bold leading-tight truncate", isDark ? "text-white" : "text-slate-900")}>
-                Women's Football
+              <div className="text-base font-serif font-normal leading-tight truncate text-foreground">
+                Women's <em className="italic text-indigo-500 dark:text-indigo-400">Football</em>
               </div>
             </div>
           </div>

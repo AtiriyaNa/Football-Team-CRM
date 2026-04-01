@@ -179,8 +179,8 @@ export default function Players() {
     <div className="space-y-5">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-800 dark:text-slate-100">{team} <span className="text-slate-400 dark:text-slate-500 font-normal">— Players</span></h1>
-          <p className="text-sm text-slate-500 dark:text-slate-600 mt-1">{players.filter((p) => p.is_active).length} active players</p>
+          <h1 className="text-3xl font-serif font-normal tracking-tight text-foreground">{team} <em className="italic text-indigo-500 dark:text-indigo-400 not-italic font-serif">— Players</em></h1>
+          <p className="text-sm text-muted-foreground mt-1">{players.filter((p) => p.is_active).length} active players</p>
         </div>
         <div className="flex items-center gap-2">
           <TeamSwitcher />
