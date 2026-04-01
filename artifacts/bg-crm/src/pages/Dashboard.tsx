@@ -5,7 +5,7 @@ import { MetricCardSkeleton, ChartSkeleton } from "@/components/Skeleton";
 import { EmptyState } from "@/components/EmptyState";
 import { MasBadge } from "@/components/MasBadge";
 import { formatBroncho } from "@/lib/utils";
-import { fetchTeamAvgBroncho, fetchLatestSessionResults, fetchPlayers } from "@/lib/queries";
+import { fetchTeamAvgBroncho, fetchLatestSessionResults, fetchPlayers, fetchMostImprovedPlayer } from "@/lib/queries";
 import { MAS_TIERS, type Player, type TestResult, type TestSession } from "@/lib/types";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Cell } from "recharts";
 import { Users, Timer, TrendingUp, AlertCircle, BarChart2 } from "lucide-react";
@@ -35,18 +35,21 @@ export default function Dashboard() {
   const [players, setPlayers] = useState<Player[]>([]);
   const [latestData, setLatestData] = useState<LatestData | null>(null);
   const [chartData, setChartData] = useState<{ date: string; avg: string; mins: number }[]>([]);
+  const [mostImproved, setMostImproved] = useState<{ name: string; improvementSecs: number } | null>(null);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [ps, latest, avgs] = await Promise.all([
+      const [ps, latest, avgs, improved] = await Promise.all([
         fetchPlayers(team),
         fetchLatestSessionResults(team),
         fetchTeamAvgBroncho(team),
+        fetchMostImprovedPlayer(team),
       ]);
       setPlayers(ps);
       setLatestData(latest);
+      setMostImproved(improved);
       setChartData(
         avgs.map((a) => ({
           date: a.session.test_date,
@@ -68,16 +71,6 @@ export default function Dashboard() {
   const avgBronchoMins = latestResults.length
     ? latestResults.reduce((s, r) => s + (r.bronco_mins ?? 0), 0) / latestResults.filter((r) => r.bronco_mins !== null).length
     : null;
-
-  // Most improved: biggest bronco improvement across all sessions
-  const mostImproved = (() => {
-    if (latestResults.length < 1) return null;
-    // For simplicity show player with lowest bronco in latest session (best performer)
-    const withBronco = latestResults.filter((r) => r.bronco_mins !== null);
-    if (!withBronco.length) return null;
-    const best = withBronco.reduce((a, b) => (a.bronco_mins! < b.bronco_mins! ? a : b));
-    return best.players?.name ?? null;
-  })();
 
   // Players not yet tested in latest session
   const testedPlayerIds = new Set(latestResults.map((r) => r.player_id));
@@ -116,11 +109,11 @@ export default function Dashboard() {
               sub={latestSession ? latestSession.test_name : "No data"}
             />
             <MetricCard
-              title="Top Performer"
-              value={mostImproved ?? "—"}
+              title="Most Improved"
+              value={mostImproved?.name ?? "—"}
               icon={TrendingUp}
               highlight={!!mostImproved}
-              sub="Best Broncho this session"
+              sub={mostImproved ? `↓ ${mostImproved.improvementSecs}s improvement` : "Need 2+ sessions"}
             />
             <MetricCard
               title="Not Yet Tested"

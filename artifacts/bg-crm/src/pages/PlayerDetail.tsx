@@ -7,7 +7,7 @@ import { ChartSkeleton, TableSkeleton, Skeleton } from "@/components/Skeleton";
 import { EmptyState } from "@/components/EmptyState";
 import type { Player, TestResult } from "@/lib/types";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
-import { ArrowLeft, Edit, Save, X, Timer, Dumbbell } from "lucide-react";
+import { ArrowLeft, Edit, Save, X, Timer, Dumbbell, ChevronLeft, ChevronRight } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 const POSITIONS = ["GK", "CB", "LB", "RB", "WB", "CDM", "CM", "CAM", "LW", "RW", "ST", "CF", "SS"];
@@ -22,6 +22,8 @@ export default function PlayerDetail() {
   const [editing, setEditing] = useState(false);
   const [editForm, setEditForm] = useState<Partial<Player>>({});
   const [saving, setSaving] = useState(false);
+  const [historyPage, setHistoryPage] = useState(0);
+  const HISTORY_PAGE_SIZE = 10;
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -206,44 +208,72 @@ export default function PlayerDetail() {
         )}
       </div>
 
-      {/* Full test history */}
+      {/* Full test history with pagination */}
       <div className="bg-card border border-border rounded-lg">
-        <div className="px-4 py-3 border-b border-border">
+        <div className="px-4 py-3 border-b border-border flex items-center justify-between">
           <h2 className="text-sm font-semibold text-foreground">Test History</h2>
+          <span className="text-xs text-muted-foreground">{results.length} result{results.length !== 1 ? "s" : ""}</span>
         </div>
         {results.length === 0 ? (
           <EmptyState icon={Dumbbell} title="No test results" description="No fitness tests recorded for this player" />
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm" data-testid="test-history-table">
-              <thead>
-                <tr className="border-b border-border text-xs text-muted-foreground">
-                  <th className="px-4 py-2.5 text-left font-medium">Date</th>
-                  <th className="px-4 py-2.5 text-left font-medium">Session</th>
-                  <th className="px-4 py-2.5 text-right font-medium">Broncho</th>
-                  <th className="px-4 py-2.5 text-right font-medium">MAS</th>
-                  <th className="px-4 py-2.5 text-right font-medium">10m</th>
-                  <th className="px-4 py-2.5 text-right font-medium">20m</th>
-                  <th className="px-4 py-2.5 text-right font-medium">40m</th>
-                  <th className="px-4 py-2.5 text-right font-medium">Tier</th>
-                </tr>
-              </thead>
-              <tbody>
-                {results.map((r) => (
-                  <tr key={r.id} className="border-b border-border/50 hover:bg-muted/30" data-testid={`row-result-${r.id}`}>
-                    <td className="px-4 py-2.5 text-muted-foreground font-time text-xs">{r.test_sessions?.test_date ?? "—"}</td>
-                    <td className="px-4 py-2.5 text-foreground">{r.test_sessions?.test_name ?? "—"}</td>
-                    <td className="px-4 py-2.5 text-right font-time text-foreground">{formatBroncho(r.bronco_mins)}</td>
-                    <td className="px-4 py-2.5 text-right font-time text-foreground">{r.mas_ms !== null ? r.mas_ms.toFixed(2) : "—"}</td>
-                    <td className="px-4 py-2.5 text-right font-time text-muted-foreground">{r.ten_m_1 !== null ? r.ten_m_1.toFixed(2) + "s" : "—"}</td>
-                    <td className="px-4 py-2.5 text-right font-time text-muted-foreground">{r.twenty_m_1 !== null ? r.twenty_m_1.toFixed(2) + "s" : "—"}</td>
-                    <td className="px-4 py-2.5 text-right font-time text-muted-foreground">{r.forty_m_1 !== null ? r.forty_m_1.toFixed(2) + "s" : "—"}</td>
-                    <td className="px-4 py-2.5 text-right"><MasBadge mas={r.mas_ms} /></td>
+          <>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm" data-testid="test-history-table">
+                <thead>
+                  <tr className="border-b border-border text-xs text-muted-foreground">
+                    <th className="px-4 py-2.5 text-left font-medium">Date</th>
+                    <th className="px-4 py-2.5 text-left font-medium">Session</th>
+                    <th className="px-4 py-2.5 text-right font-medium">Broncho</th>
+                    <th className="px-4 py-2.5 text-right font-medium">MAS</th>
+                    <th className="px-4 py-2.5 text-right font-medium">10m</th>
+                    <th className="px-4 py-2.5 text-right font-medium">20m</th>
+                    <th className="px-4 py-2.5 text-right font-medium">40m</th>
+                    <th className="px-4 py-2.5 text-right font-medium">Tier</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {results.slice(historyPage * HISTORY_PAGE_SIZE, (historyPage + 1) * HISTORY_PAGE_SIZE).map((r) => (
+                    <tr key={r.id} className="border-b border-border/50 hover:bg-muted/30" data-testid={`row-result-${r.id}`}>
+                      <td className="px-4 py-2.5 text-muted-foreground font-time text-xs">{r.test_sessions?.test_date ?? "—"}</td>
+                      <td className="px-4 py-2.5 text-foreground">{r.test_sessions?.test_name ?? "—"}</td>
+                      <td className="px-4 py-2.5 text-right font-time text-foreground">{formatBroncho(r.bronco_mins)}</td>
+                      <td className="px-4 py-2.5 text-right font-time text-foreground">{r.mas_ms !== null ? r.mas_ms.toFixed(2) : "—"}</td>
+                      <td className="px-4 py-2.5 text-right font-time text-muted-foreground">{r.ten_m_1 !== null ? r.ten_m_1.toFixed(2) + "s" : "—"}</td>
+                      <td className="px-4 py-2.5 text-right font-time text-muted-foreground">{r.twenty_m_1 !== null ? r.twenty_m_1.toFixed(2) + "s" : "—"}</td>
+                      <td className="px-4 py-2.5 text-right font-time text-muted-foreground">{r.forty_m_1 !== null ? r.forty_m_1.toFixed(2) + "s" : "—"}</td>
+                      <td className="px-4 py-2.5 text-right"><MasBadge mas={r.mas_ms} /></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {results.length > HISTORY_PAGE_SIZE && (
+              <div className="px-4 py-3 border-t border-border flex items-center justify-between">
+                <span className="text-xs text-muted-foreground">
+                  Page {historyPage + 1} of {Math.ceil(results.length / HISTORY_PAGE_SIZE)}
+                </span>
+                <div className="flex gap-1">
+                  <button
+                    onClick={() => setHistoryPage((p) => Math.max(0, p - 1))}
+                    disabled={historyPage === 0}
+                    className="p-1 rounded text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed"
+                    data-testid="history-prev"
+                  >
+                    <ChevronLeft size={16} />
+                  </button>
+                  <button
+                    onClick={() => setHistoryPage((p) => Math.min(Math.ceil(results.length / HISTORY_PAGE_SIZE) - 1, p + 1))}
+                    disabled={historyPage >= Math.ceil(results.length / HISTORY_PAGE_SIZE) - 1}
+                    className="p-1 rounded text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed"
+                    data-testid="history-next"
+                  >
+                    <ChevronRight size={16} />
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>

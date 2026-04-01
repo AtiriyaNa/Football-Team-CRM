@@ -75,6 +75,39 @@ export async function bulkInsertResults(results: Omit<TestResult, "id" | "create
   if (error) throw error;
 }
 
+// Most improved player: finds player with the biggest Broncho improvement (lower is better)
+// Compares first-ever result to most-recent result per player
+export async function fetchMostImprovedPlayer(team: string): Promise<{ name: string; improvementSecs: number } | null> {
+  const { data, error } = await supabase
+    .from("test_results")
+    .select("player_id, bronco_mins, created_at, players!inner(name, team)")
+    .eq("players.team", team)
+    .not("bronco_mins", "is", null)
+    .order("created_at", { ascending: true });
+  if (error) throw error;
+  if (!data || data.length === 0) return null;
+
+  // Group by player
+  const byPlayer: Record<string, { name: string; times: number[] }> = {};
+  for (const row of data as unknown as Array<{ player_id: string; bronco_mins: number; players: { name: string } }>) {
+    if (!byPlayer[row.player_id]) byPlayer[row.player_id] = { name: row.players.name, times: [] };
+    byPlayer[row.player_id].times.push(row.bronco_mins);
+  }
+
+  // Find player with greatest improvement (first session - latest session, in seconds; positive = improvement)
+  let best: { name: string; improvementSecs: number } | null = null;
+  for (const { name, times } of Object.values(byPlayer)) {
+    if (times.length < 2) continue;
+    const first = times[0];
+    const latest = times[times.length - 1];
+    const improvementSecs = Math.round((first - latest) * 60); // positive = got faster
+    if (!best || improvementSecs > best.improvementSecs) {
+      best = { name, improvementSecs };
+    }
+  }
+  return best;
+}
+
 // Dashboard helpers
 export async function fetchLatestSessionResults(team: string): Promise<{
   session: TestSession | null;

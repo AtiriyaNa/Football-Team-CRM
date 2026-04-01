@@ -63,7 +63,7 @@ function AddPlayerModal({ onClose, onSaved }: { onClose: () => void; onSaved: ()
     </div>
   );
 
-  const input = (key: keyof typeof form, props: React.InputHTMLAttributes<HTMLInputElement> = {}) => (
+  const input = (key: keyof typeof form, props: React.InputHTMLAttributes<HTMLInputElement> & { "data-testid"?: string } = {}) => (
     <input
       {...props}
       value={String(form[key])}
