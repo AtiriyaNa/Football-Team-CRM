@@ -4,7 +4,7 @@ import { TeamSwitcher } from "@/components/TeamSwitcher";
 import { ChartSkeleton } from "@/components/Skeleton";
 import { EmptyState } from "@/components/EmptyState";
 import { formatBroncho } from "@/lib/utils";
-import { getMasTier, MAS_TIERS, type Player, type TestResult, type TestSession } from "@/lib/types";
+import { getBronchoTier, BRONCHO_TIERS, type Player, type TestResult, type TestSession } from "@/lib/types";
 import { fetchAllResults, fetchSessions, fetchPlayers } from "@/lib/queries";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -39,10 +39,10 @@ function ChangeBadge({ diffSecs }: { diffSecs: number | null }) {
   return <span className="inline-block px-2 py-0.5 rounded-full text-[11px] font-time bg-red-400/15 text-red-400">▼ {Math.abs(diffSecs)}s</span>;
 }
 
-// ── Tier badge ─────────────────────────────────────────────────────────────
-function TierBadge({ mas }: { mas: number | null }) {
-  if (!mas) return <span className="text-xs text-muted-foreground">—</span>;
-  const t = getMasTier(mas);
+// ── Tier badge (broncho-based) ─────────────────────────────────────────────
+function TierBadge({ bronco }: { bronco: number | null }) {
+  if (bronco === null) return <span className="text-xs text-muted-foreground">—</span>;
+  const t = getBronchoTier(bronco);
   return <span className="text-xs font-medium" style={{ color: t.color }}>{t.label}</span>;
 }
 
@@ -71,35 +71,24 @@ function MetricCard({ label, value, sub, valueColor }: { label: string; value: s
   );
 }
 
-// ── Benchmark tier strip ───────────────────────────────────────────────────
-function TierStrip({ players: ps, results: rs }: { players: { player: Player; mas: number | null }[]; results: never[] }) {
-  const _ = rs;
+// ── Benchmark tier strip (broncho-based) ──────────────────────────────────
+function TierStrip({ players: ps }: { players: { player: Player; bronco: number | null }[] }) {
   return (
     <div className="space-y-1">
-      {MAS_TIERS.map((t) => {
-        const inTier = ps.filter((x) => x.mas !== null && x.mas >= t.min && (t.max === Infinity ? true : x.mas < t.max));
+      {BRONCHO_TIERS.map((t) => {
+        const inTier = ps.filter((x) => x.bronco !== null && x.bronco >= t.minMins && x.bronco < t.maxMins);
         return (
           <div key={t.label}>
             <div className="flex items-center gap-3 px-3 py-2.5 rounded-lg border" style={{ backgroundColor: t.color + "12", borderColor: t.color + "30" }}>
-              <span className="text-xs font-semibold min-w-[110px]" style={{ color: t.color }}>{t.label}</span>
-              <span className="text-[11px] font-time text-muted-foreground min-w-[90px]">
-                {t.max === Infinity ? `>${t.min.toFixed(1)} m/s` : t.min === 0 ? `<${t.max.toFixed(1)} m/s` : `${t.min.toFixed(1)}–${t.max.toFixed(1)} m/s`}
-              </span>
-              <span className="text-[11px] text-muted-foreground flex-1 hidden sm:block">
-                {t.label === "World Record" ? "Top 1% — professional athletes"
-                  : t.label === "Elite Pro" ? "International & top-tier pro"
-                  : t.label === "Outstanding" ? "High-level competitive"
-                  : t.label === "Very Good" ? "Competitive club / college"
-                  : t.label === "Good" ? "Above average, suitable for competition"
-                  : t.label === "Average" ? "Average fitness for team sports"
-                  : "Needs improvement"}
-              </span>
+              <span className="text-xs font-semibold min-w-[130px]" style={{ color: t.color }}>{t.label}</span>
+              <span className="text-[11px] font-time text-muted-foreground min-w-[80px]">{t.displayRange}</span>
+              <span className="text-[11px] text-muted-foreground flex-1 hidden sm:block">{t.description}</span>
               <span className="ml-auto text-sm font-bold font-time" style={{ color: t.color }}>{inTier.length}</span>
             </div>
             {inTier.length > 0 && (
               <div className="flex flex-wrap gap-1.5 px-3 pb-2">
-                {inTier.map(({ player, mas }) => (
-                  <div key={player.id} title={`${player.name} · ${mas?.toFixed(2)} m/s`}
+                {inTier.map(({ player, bronco }) => (
+                  <div key={player.id} title={`${player.name} · ${formatBroncho(bronco)}`}
                     className="w-6 h-6 rounded-full flex items-center justify-center text-[8px] font-bold font-time cursor-default"
                     style={{ backgroundColor: t.color + "22", color: t.color, border: `1px solid ${t.color}44` }}>
                     {player.name.slice(0, 2).toUpperCase()}
@@ -192,15 +181,12 @@ export default function Analytics() {
     });
   }, [players, teamResults, chronoSessions]);
 
-  // Benchmark data
+  // Benchmark data — broncho-based (lower = better/faster)
   const benchmarkData = useMemo(() => {
     return playerComparisons
-      .map(({ player, latest, pResults }) => {
-        const latestMas = pResults.length > 0 ? pResults[pResults.length - 1].mas_ms : null;
-        return { player, mas: latestMas, bronco: latest?.bronco_mins ?? null };
-      })
-      .filter((x) => x.mas !== null)
-      .sort((a, b) => b.mas! - a.mas!);
+      .map(({ player, latest }) => ({ player, bronco: latest?.bronco_mins ?? null }))
+      .filter((x) => x.bronco !== null)
+      .sort((a, b) => a.bronco! - b.bronco!); // ascending: best (fastest) first
   }, [playerComparisons]);
 
   // Overview: per-player change sorted best → worst
@@ -372,23 +358,27 @@ export default function Analytics() {
             </div>
 
             <div className="bg-card border border-border rounded-2xl p-5">
-              <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-4">MAS distribution (latest)</div>
+              <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-4">Tier distribution (latest session)</div>
               {loading ? <ChartSkeleton height={180} /> : (() => {
-                const masValues = teamResults
-                  .filter((r) => r.session_id === latestSession?.id && r.mas_ms !== null)
-                  .map((r) => r.mas_ms!);
-                if (!masValues.length) return <div className="h-[180px] flex items-center justify-center text-sm text-muted-foreground">No MAS data</div>;
-                const breaks = [0, 3.0, 3.2, 3.4, 3.6, 3.8, Infinity];
-                const labels = ["<3.0", "3.0–3.2", "3.2–3.4", "3.4–3.6", "3.6–3.8", "3.8+"];
-                const data = labels.map((l, i) => ({ l, count: masValues.filter((v) => v >= breaks[i] && v < breaks[i + 1]).length }));
+                const broncoVals = teamResults
+                  .filter((r) => r.session_id === latestSession?.id && r.bronco_mins !== null)
+                  .map((r) => r.bronco_mins!);
+                if (!broncoVals.length) return <div className="h-[180px] flex items-center justify-center text-sm text-muted-foreground">No broncho data</div>;
+                const data = BRONCHO_TIERS.map((t) => ({
+                  l: t.displayRange,
+                  count: broncoVals.filter((v) => v >= t.minMins && v < t.maxMins).length,
+                  color: t.color,
+                })).filter((d) => d.count > 0);
                 return (
                   <ResponsiveContainer width="100%" height={180}>
                     <BarChart data={data} margin={{ top: 4, right: 8, bottom: 4, left: 0 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke={chartGrid} />
-                      <XAxis dataKey="l" tick={{ fill: chartAxis, fontSize: 10 }} />
+                      <XAxis dataKey="l" tick={{ fill: chartAxis, fontSize: 9 }} />
                       <YAxis tick={{ fill: chartAxis, fontSize: 10 }} allowDecimals={false} />
                       <Tooltip contentStyle={{ background: chartTooltipBg, border: `1px solid ${chartTooltipBorder}`, borderRadius: 8 }} formatter={(v: number) => [v, "Players"]} />
-                      <Bar dataKey="count" fill="#60a5fa" radius={[3, 3, 0, 0]} />
+                      <Bar dataKey="count" radius={[3, 3, 0, 0]}>
+                        {data.map((d, i) => <Cell key={i} fill={d.color} />)}
+                      </Bar>
                     </BarChart>
                   </ResponsiveContainer>
                 );
@@ -401,42 +391,58 @@ export default function Analytics() {
       {/* ── BENCHMARKS ───────────────────────────────────────────── */}
       {tab === "benchmarks" && (
         <div className="space-y-4">
+          {/* Tier distribution FIRST */}
           <div className="bg-card border border-border rounded-2xl p-5">
-            <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-4">Player MAS vs female athlete benchmarks</div>
+            <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-1">Tier distribution — {team} squad</div>
+            <p className="text-[11px] text-muted-foreground mb-4">Female athlete benchmarks · lower time = better</p>
+            {loading ? <ChartSkeleton /> : benchmarkData.length === 0 ? (
+              <EmptyState title="No broncho data yet" description="Record fitness test sessions to see tier distribution" />
+            ) : (
+              <TierStrip players={benchmarkData} />
+            )}
+          </div>
+
+          {/* Player vs benchmark bar chart */}
+          <div className="bg-card border border-border rounded-2xl p-5">
+            <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-1">Player broncho time vs benchmarks</div>
+            <p className="text-[11px] text-muted-foreground mb-4">Latest session · reference lines mark tier boundaries · lower = faster</p>
             {loading ? <ChartSkeleton height={320} /> : benchmarkData.length === 0 ? (
-              <EmptyState title="No MAS data" description="MAS scores will appear after fitness tests are recorded" />
+              <EmptyState title="No broncho data" description="Broncho times will appear after fitness tests are recorded" />
             ) : (
               <ResponsiveContainer width="100%" height={Math.max(200, benchmarkData.length * 26 + 80)}>
                 <BarChart
-                  data={benchmarkData.map((d) => ({ name: d.player.name, mas: d.mas, tier: getMasTier(d.mas!).label }))}
+                  data={benchmarkData.map((d) => ({ name: d.player.name, bronco: d.bronco, tier: getBronchoTier(d.bronco!).label }))}
                   layout="vertical"
-                  margin={{ top: 4, right: 50, bottom: 4, left: 10 }}
+                  margin={{ top: 4, right: 60, bottom: 4, left: 10 }}
                 >
                   <CartesianGrid strokeDasharray="3 3" stroke={chartGrid} horizontal={false} />
-                  <XAxis type="number" domain={[2.4, 4.8]} tick={{ fill: chartAxis, fontSize: 10 }} tickCount={8} />
-                  <YAxis type="category" dataKey="name" tick={{ fill: chartAxis, fontSize: 11 }} width={90} />
-                  {MAS_TIERS.filter((t) => t.min > 0 && t.min < 4.8).map((t) => (
-                    <ReferenceLine key={t.min} x={t.min} stroke={t.color + "66"} strokeDasharray="4 3" />
+                  <XAxis
+                    type="number"
+                    domain={[4.0, 6.0]}
+                    tick={{ fill: chartAxis, fontSize: 10 }}
+                    tickCount={9}
+                    tickFormatter={(v: number) => {
+                      const m = Math.floor(v);
+                      const s = Math.round((v - m) * 60);
+                      return `${m}:${s.toString().padStart(2, "0")}`;
+                    }}
+                  />
+                  <YAxis type="category" dataKey="name" tick={{ fill: chartAxis, fontSize: 11 }} width={95} />
+                  {BRONCHO_TIERS.filter((t) => t.minMins > 4.0 && t.minMins < 6.0).map((t) => (
+                    <ReferenceLine key={t.minMins} x={t.minMins} stroke={t.color + "66"} strokeDasharray="4 3" label={{ value: t.label, position: "insideTopRight", fill: t.color, fontSize: 9 }} />
                   ))}
                   <Tooltip
                     contentStyle={{ background: chartTooltipBg, border: `1px solid ${chartTooltipBorder}`, borderRadius: 8 }}
                     labelStyle={{ color: isDark ? "#f1f5f9" : "#0f172a", fontSize: 12, fontWeight: 600 }}
-                    formatter={(v: number, _: string, props) => [`${v.toFixed(2)} m/s — ${props.payload.tier}`, ""]}
+                    formatter={(v: number, _: string, props) => [`${formatBroncho(v)} — ${props.payload.tier}`, ""]}
                   />
-                  <Bar dataKey="mas" radius={[0, 3, 3, 0]} minPointSize={2}>
+                  <Bar dataKey="bronco" radius={[0, 3, 3, 0]} minPointSize={2}>
                     {benchmarkData.map((entry, i) => (
-                      <Cell key={i} fill={getMasTier(entry.mas!).color} />
+                      <Cell key={i} fill={getBronchoTier(entry.bronco!).color} />
                     ))}
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
-            )}
-          </div>
-
-          <div className="bg-card border border-border rounded-2xl p-5">
-            <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-4">Tier distribution — {team} squad</div>
-            {loading ? <ChartSkeleton /> : (
-              <TierStrip players={benchmarkData} results={[] as never[]} />
             )}
           </div>
         </div>
@@ -477,7 +483,6 @@ export default function Analytics() {
                     <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Group</th>
                     <th className="px-4 py-3 text-right text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">First</th>
                     <th className="px-4 py-3 text-right text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Latest</th>
-                    <th className="px-4 py-3 text-right text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">MAS</th>
                     <th className="px-4 py-3 text-right text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Tier</th>
                     <th className="px-4 py-3 text-right text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Change</th>
                   </tr>
@@ -485,8 +490,7 @@ export default function Analytics() {
                 <tbody>
                   {playerComparisons
                     .filter((x) => (posFilter === "all" || x.player.primary_position === posFilter) && (ageFilter === "all" || x.player.age_range === ageFilter))
-                    .map(({ player, first, latest, diffSecs, pResults }) => {
-                      const latestMas = pResults.length > 0 ? pResults[pResults.length - 1].mas_ms : null;
+                    .map(({ player, first, latest, diffSecs }) => {
                       return (
                         <tr key={player.id} className="border-b border-border/50 hover:bg-muted/20 transition-colors">
                           <td className="px-4 py-2.5"><PosBadge pos={player.primary_position} /></td>
@@ -498,8 +502,7 @@ export default function Analytics() {
                           </td>
                           <td className="px-4 py-2.5 text-right font-time text-muted-foreground">{first ? formatBroncho(first.bronco_mins) : <span className="text-muted-foreground/50">—</span>}</td>
                           <td className="px-4 py-2.5 text-right font-time text-foreground">{latest ? formatBroncho(latest.bronco_mins) : <span className="text-muted-foreground/50">—</span>}</td>
-                          <td className="px-4 py-2.5 text-right font-time text-foreground">{latestMas?.toFixed(2) ?? <span className="text-muted-foreground/50">—</span>}</td>
-                          <td className="px-4 py-2.5 text-right"><TierBadge mas={latestMas} /></td>
+                          <td className="px-4 py-2.5 text-right"><TierBadge bronco={latest?.bronco_mins ?? null} /></td>
                           <td className="px-4 py-2.5 text-right"><ChangeBadge diffSecs={diffSecs} /></td>
                         </tr>
                       );
