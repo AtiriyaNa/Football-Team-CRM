@@ -18,7 +18,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       const saved = localStorage.getItem("bg-crm-theme") as Theme;
       if (saved === "light" || saved === "dark") return saved;
     } catch {}
-    return "dark";
+    return "light";
   });
 
   useEffect(() => {

@@ -73,7 +73,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
               )}
             />
             <div className="min-w-0">
-              <div className={cn("text-[10px] font-semibold uppercase tracking-[0.14em] truncate", isDark ? "text-slate-500" : "text-slate-400")}>
+              <div className={cn("text-[10px] font-semibold uppercase tracking-[0.14em]", isDark ? "text-slate-500" : "text-slate-400")}>
                 Bombay Gymkhana
               </div>
               <div className="text-base font-medium leading-tight truncate text-foreground">
