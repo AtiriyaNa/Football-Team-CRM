@@ -1,12 +1,12 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
 import Papa from "papaparse";
-import { fetchSessions, createSession, fetchPlayers, bulkInsertResults, fetchResultsBySessionWithPlayers } from "@/lib/queries";
+import { fetchSessions, createSession, fetchPlayers, bulkInsertResults, fetchResultsBySessionWithPlayers, updateResult, deleteResult, insertResult } from "@/lib/queries";
 import { TableSkeleton } from "@/components/Skeleton";
 import { EmptyState } from "@/components/EmptyState";
 import { formatBroncho } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 import type { TestSession, Player, TestResult } from "@/lib/types";
-import { Dumbbell, Plus, CheckCircle2, AlertCircle, ChevronRight } from "lucide-react";
+import { Dumbbell, Plus, CheckCircle2, AlertCircle, ChevronRight, Pencil, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 type Step = "list" | "session-detail" | "create-session" | "enter-data" | "preview" | "done";
@@ -15,6 +15,7 @@ interface CsvRow {
   code: string;
   name: string;
   bronco_mins?: number;
+  mas_ms?: number;
   ten_m_1?: number;
   ten_m_2?: number;
   twenty_m_1?: number;
@@ -32,10 +33,10 @@ interface MatchedRow {
 type EnrichedResult = TestResult & { players: Player };
 
 const POS_CFG: Record<string, { text: string; bg: string }> = {
-  F:  { text: "text-red-400",    bg: "bg-red-400/15"    },
-  M:  { text: "text-blue-400",   bg: "bg-blue-400/15"   },
-  D:  { text: "text-indigo-400", bg: "bg-indigo-400/15" },
-  GK: { text: "text-amber-400",  bg: "bg-amber-400/15"  },
+  Forward:    { text: "text-red-400",    bg: "bg-red-400/15"    },
+  Midfielder: { text: "text-blue-400",   bg: "bg-blue-400/15"   },
+  Defender:   { text: "text-indigo-400", bg: "bg-indigo-400/15" },
+  Goalkeeper: { text: "text-amber-400",  bg: "bg-amber-400/15"  },
 };
 function getPos(pos: string | null) {
   return POS_CFG[pos ?? ""] ?? { text: "text-slate-400", bg: "bg-slate-400/15" };
@@ -57,6 +58,7 @@ function parseCsv(text: string): CsvRow[] {
     code: obj["code"] ?? "",
     name: obj["name"] ?? "",
     bronco_mins: parseNum(obj["bronco_mins"]) ?? undefined,
+    mas_ms: parseNum(obj["mas_ms"]) ?? undefined,
     ten_m_1: parseNum(obj["ten_m_1"]) ?? undefined,
     ten_m_2: parseNum(obj["ten_m_2"]) ?? undefined,
     twenty_m_1: parseNum(obj["twenty_m_1"]) ?? undefined,
@@ -68,6 +70,114 @@ function parseCsv(text: string): CsvRow[] {
 }
 
 // ── Session detail view ────────────────────────────────────────────────────
+interface EditForm {
+  bronco_mins: string;
+  mas_ms: string;
+  ten_m_1: string;
+  ten_m_2: string;
+  twenty_m_1: string;
+  twenty_m_2: string;
+  forty_m_1: string;
+  forty_m_2: string;
+  notes: string;
+}
+
+const BLANK_FORM: EditForm = {
+  bronco_mins: "", mas_ms: "", ten_m_1: "", ten_m_2: "",
+  twenty_m_1: "", twenty_m_2: "", forty_m_1: "", forty_m_2: "", notes: "",
+};
+
+function resultToForm(r: TestResult): EditForm {
+  return {
+    bronco_mins: r.bronco_mins != null ? String(r.bronco_mins) : "",
+    mas_ms: r.mas_ms != null ? String(r.mas_ms) : "",
+    ten_m_1: r.ten_m_1 != null ? String(r.ten_m_1) : "",
+    ten_m_2: r.ten_m_2 != null ? String(r.ten_m_2) : "",
+    twenty_m_1: r.twenty_m_1 != null ? String(r.twenty_m_1) : "",
+    twenty_m_2: r.twenty_m_2 != null ? String(r.twenty_m_2) : "",
+    forty_m_1: r.forty_m_1 != null ? String(r.forty_m_1) : "",
+    forty_m_2: r.forty_m_2 != null ? String(r.forty_m_2) : "",
+    notes: r.notes ?? "",
+  };
+}
+
+function formToUpdates(f: EditForm): Partial<TestResult> {
+  const pn = (v: string) => { const n = parseFloat(v); return isNaN(n) ? null : n; };
+  return {
+    bronco_mins: pn(f.bronco_mins),
+    mas_ms: pn(f.mas_ms),
+    ten_m_1: pn(f.ten_m_1),
+    ten_m_2: pn(f.ten_m_2),
+    twenty_m_1: pn(f.twenty_m_1),
+    twenty_m_2: pn(f.twenty_m_2),
+    forty_m_1: pn(f.forty_m_1),
+    forty_m_2: pn(f.forty_m_2),
+    notes: f.notes.trim() || null,
+  };
+}
+
+function InlineEditForm({
+  form,
+  saving,
+  onChange,
+  onSave,
+  onCancel,
+}: {
+  form: EditForm;
+  saving: boolean;
+  onChange: (f: EditForm) => void;
+  onSave: () => void;
+  onCancel: () => void;
+}) {
+  const inp = (label: string, key: keyof EditForm, placeholder?: string) => (
+    <div>
+      <label className="block text-[10px] text-muted-foreground mb-0.5">{label}</label>
+      <input
+        type="number"
+        step="0.001"
+        value={form[key]}
+        onChange={(e) => onChange({ ...form, [key]: e.target.value })}
+        placeholder={placeholder ?? "—"}
+        className="w-full bg-background border border-border rounded px-2 py-1 text-xs text-foreground font-time placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-primary"
+      />
+    </div>
+  );
+  return (
+    <div className="mt-2.5 pt-2.5 border-t border-border/50 space-y-2">
+      <div className="grid grid-cols-2 gap-2">
+        {inp("Broncho (mins)", "bronco_mins", "e.g. 6.25")}
+        {inp("MAS (m/s)", "mas_ms", "e.g. 14.5")}
+      </div>
+      <div className="grid grid-cols-3 gap-2">
+        {inp("10m", "ten_m_1", "sec")}
+        {inp("20m", "twenty_m_1", "sec")}
+        {inp("40m", "forty_m_1", "sec")}
+      </div>
+      <div className="grid grid-cols-3 gap-2">
+        {inp("10m ×2", "ten_m_2", "sec")}
+        {inp("20m ×2", "twenty_m_2", "sec")}
+        {inp("40m ×2", "forty_m_2", "sec")}
+      </div>
+      <div>
+        <label className="block text-[10px] text-muted-foreground mb-0.5">Notes</label>
+        <input
+          type="text"
+          value={form.notes}
+          onChange={(e) => onChange({ ...form, notes: e.target.value })}
+          placeholder="Optional notes"
+          className="w-full bg-background border border-border rounded px-2 py-1 text-xs text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-primary"
+        />
+      </div>
+      <div className="flex gap-2">
+        <button onClick={onCancel} className="flex-1 px-3 py-1.5 text-xs rounded border border-border text-muted-foreground hover:text-foreground transition-colors">Cancel</button>
+        <button onClick={onSave} disabled={saving} className="flex-1 px-3 py-1.5 text-xs rounded btn-primary text-white font-semibold disabled:opacity-60">
+          {saving ? "Saving…" : "Save"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function SessionDetail({
   session,
   onBack,
@@ -75,46 +185,118 @@ function SessionDetail({
   session: TestSession;
   onBack: () => void;
 }) {
+  const { toast } = useToast();
   const [results, setResults] = useState<EnrichedResult[]>([]);
   const [allPlayers, setAllPlayers] = useState<Player[]>([]);
   const [loading, setLoading] = useState(true);
+  const [editMode, setEditMode] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null); // result id or "add:{playerId}"
+  const [editForm, setEditForm] = useState<EditForm>(BLANK_FORM);
+  const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
+  const reload = useCallback(() => {
     setLoading(true);
-    Promise.all([fetchResultsBySessionWithPlayers(session.id), fetchPlayers()])
-      .then(([rs, ps]) => {
-        setResults(rs);
-        setAllPlayers(ps);
-      })
+    return Promise.all([fetchResultsBySessionWithPlayers(session.id), fetchPlayers()])
+      .then(([rs, ps]) => { setResults(rs); setAllPlayers(ps); })
       .finally(() => setLoading(false));
   }, [session.id]);
 
-  // Participants: only those with a bronco result, sorted best (lowest) first
+  useEffect(() => { reload(); }, [reload]);
+
+  // Participants: all results sorted by bronco asc (nulls last)
   const participants = useMemo(() => {
-    return [...results]
-      .filter((r) => r.bronco_mins !== null)
-      .sort((a, b) => a.bronco_mins! - b.bronco_mins!);
+    return [...results].sort((a, b) => {
+      if (a.bronco_mins === null && b.bronco_mins === null) return 0;
+      if (a.bronco_mins === null) return 1;
+      if (b.bronco_mins === null) return -1;
+      return a.bronco_mins - b.bronco_mins;
+    });
   }, [results]);
 
-  // All results (any metric), for "attended but no bronco" detection
   const participantIds = useMemo(() => new Set(results.map((r) => r.player_id)), [results]);
 
-  // Absentees: active players with no result at all in this session
   const absentees = useMemo(() => {
     return allPlayers.filter((p) => p.is_active && !participantIds.has(p.id));
   }, [allPlayers, participantIds]);
 
-  const avg = participants.length
-    ? participants.reduce((s, r) => s + r.bronco_mins!, 0) / participants.length
+  const testedParticipants = participants.filter((r) => r.bronco_mins !== null);
+  const avg = testedParticipants.length
+    ? testedParticipants.reduce((s, r) => s + r.bronco_mins!, 0) / testedParticipants.length
     : null;
-
-  const best = participants[0] ?? null;
-  const worst = participants[participants.length - 1] ?? null;
-
-  // Bar width for relative score display (best = 100%, worst = proportional)
+  const best = testedParticipants[0] ?? null;
+  const worst = testedParticipants[testedParticipants.length - 1] ?? null;
   const maxBronco = worst?.bronco_mins ?? 1;
   const minBronco = best?.bronco_mins ?? 0;
   const range = maxBronco - minBronco || 1;
+
+  const handleStartEdit = (r: EnrichedResult) => {
+    setEditingId(r.id);
+    setEditForm(resultToForm(r));
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingId) return;
+    setSaving(true);
+    try {
+      await updateResult(editingId, formToUpdates(editForm));
+      await reload();
+      setEditingId(null);
+      toast({ title: "Result updated" });
+    } catch (err: unknown) {
+      toast({ title: "Failed to update", description: String(err), variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    setSaving(true);
+    try {
+      await deleteResult(id);
+      await reload();
+      toast({ title: "Result deleted" });
+    } catch (err: unknown) {
+      toast({ title: "Failed to delete", description: String(err), variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleStartAdd = (playerId: string) => {
+    setEditingId(`add:${playerId}`);
+    setEditForm(BLANK_FORM);
+  };
+
+  const handleSaveAdd = async (playerId: string) => {
+    setSaving(true);
+    try {
+      const updates = formToUpdates(editForm);
+      await insertResult({
+        session_id: session.id,
+        player_id: playerId,
+        bronco_mins: updates.bronco_mins ?? null,
+        mas_ms: updates.mas_ms ?? null,
+        seconds: null,
+        ten_m_1: updates.ten_m_1 ?? null,
+        ten_m_2: updates.ten_m_2 ?? null,
+        twenty_m_1: updates.twenty_m_1 ?? null,
+        twenty_m_2: updates.twenty_m_2 ?? null,
+        forty_m_1: updates.forty_m_1 ?? null,
+        forty_m_2: updates.forty_m_2 ?? null,
+        eighty_m_runs: null,
+        sixty_m_runs: null,
+        forty_m_runs: null,
+        notes: updates.notes ?? null,
+      });
+      await reload();
+      setEditingId(null);
+      toast({ title: "Result added" });
+    } catch (err: unknown) {
+      toast({ title: "Failed to add result", description: String(err), variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -130,26 +312,40 @@ function SessionDetail({
       <button onClick={onBack} className="text-sm text-muted-foreground hover:text-foreground">← Fitness Tests</button>
 
       {/* Session header */}
-      <div>
-        <div className="flex items-center gap-2.5 flex-wrap">
-          <h1 className="text-3xl font-serif font-normal tracking-tight text-foreground">{session.test_name}</h1>
-          {session.type && (
-            <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-medium bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
-              {session.type}
-            </span>
-          )}
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <h1 className="text-3xl font-semibold tracking-tight text-foreground">{session.test_name}</h1>
+            {session.type && (
+              <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-medium bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+                {session.type}
+              </span>
+            )}
+          </div>
+          <p className="text-sm text-muted-foreground mt-1">{session.test_date}{session.notes ? ` · ${session.notes}` : ""}</p>
         </div>
-        <p className="text-sm text-muted-foreground mt-1">{session.test_date}{session.notes ? ` · ${session.notes}` : ""}</p>
+        <button
+          onClick={() => { setEditMode((v) => !v); setEditingId(null); }}
+          className={cn(
+            "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors",
+            editMode
+              ? "bg-indigo-500/15 text-indigo-400 border-indigo-500/30"
+              : "border-border text-muted-foreground hover:text-foreground hover:bg-muted/40"
+          )}
+        >
+          <Pencil size={13} />
+          {editMode ? "Done editing" : "Edit results"}
+        </button>
       </div>
 
       {/* Metric strip */}
       <div className="grid grid-cols-2 sm:grid-cols-5 border border-border rounded-2xl overflow-hidden divide-x divide-y sm:divide-y-0 divide-border bg-card">
         {[
-          { label: "Tested",   value: participants.length,        sub: "with bronco score" },
-          { label: "Absent",   value: absentees.length,           sub: "no result recorded" },
+          { label: "Tested",   value: testedParticipants.length,  sub: "with bronco score" },
+          { label: "Absent",   value: absentees.length,            sub: "no result recorded" },
           { label: "Best",     value: formatBroncho(best?.bronco_mins ?? null),  sub: best?.players.name ?? "—" },
           { label: "Slowest",  value: formatBroncho(worst?.bronco_mins ?? null), sub: worst?.players.name ?? "—" },
-          { label: "Avg",      value: formatBroncho(avg),         sub: "team average" },
+          { label: "Avg",      value: formatBroncho(avg),          sub: "team average" },
         ].map(({ label, value, sub }) => (
           <div key={label} className="py-4 px-5">
             <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-1.5">{label}</div>
@@ -163,14 +359,18 @@ function SessionDetail({
       {participants.length > 0 && (
         <div className="space-y-2">
           <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-            Participants — {participants.length} tested
+            Participants — {participants.length} recorded
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
             {participants.map((r, idx) => {
-              const isFirst = idx === 0;
-              const isLast = idx === participants.length - 1 && participants.length > 1;
+              const testedIdx = testedParticipants.findIndex((t) => t.id === r.id);
+              const isFirst = testedIdx === 0 && r.bronco_mins !== null;
+              const isLast = testedIdx === testedParticipants.length - 1 && testedParticipants.length > 1 && r.bronco_mins !== null;
               const pos = getPos(r.players.primary_position);
-              const barPct = maxBronco === minBronco ? 100 : Math.round(100 - ((r.bronco_mins! - minBronco) / range) * 80);
+              const barPct = r.bronco_mins !== null && maxBronco !== minBronco
+                ? Math.round(100 - ((r.bronco_mins - minBronco) / range) * 80)
+                : r.bronco_mins !== null ? 100 : 0;
+              const isEditing = editingId === r.id;
 
               return (
                 <div
@@ -184,7 +384,7 @@ function SessionDetail({
                       : "border-border"
                   )}
                 >
-                  {/* Top row: rank + label + name */}
+                  {/* Top row */}
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex items-center gap-2.5">
                       <span className={cn(
@@ -193,44 +393,70 @@ function SessionDetail({
                           : isLast ? "bg-red-500/15 text-red-400"
                           : "bg-muted text-muted-foreground"
                       )}>
-                        {idx + 1}
+                        {testedIdx >= 0 ? testedIdx + 1 : idx + 1}
                       </span>
                       <div>
                         <div className="font-semibold text-sm text-foreground leading-tight">{r.players.name}</div>
                         <div className="font-time text-[10px] text-muted-foreground">{r.players.code}</div>
                       </div>
                     </div>
-                    <div className="flex flex-col items-end gap-1">
-                      <span className={cn("inline-flex items-center justify-center w-7 h-7 rounded-md text-[10px] font-bold font-time", pos.text, pos.bg)}>
-                        {r.players.primary_position || "?"}
-                      </span>
-                      {r.players.age_range && (
-                        <span className="text-[10px] text-muted-foreground font-time">{r.players.age_range}</span>
+                    <div className="flex items-center gap-1.5">
+                      {editMode && (
+                        <>
+                          <button
+                            onClick={() => isEditing ? setEditingId(null) : handleStartEdit(r)}
+                            className="p-1 rounded text-muted-foreground hover:text-indigo-400 transition-colors"
+                            title="Edit result"
+                          >
+                            <Pencil size={12} />
+                          </button>
+                          <button
+                            onClick={() => handleDelete(r.id)}
+                            disabled={saving}
+                            className="p-1 rounded text-muted-foreground hover:text-red-400 transition-colors disabled:opacity-40"
+                            title="Delete result"
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        </>
                       )}
+                      <div className="flex flex-col items-end gap-1">
+                        <span className={cn("inline-flex items-center justify-center px-1.5 py-0.5 rounded-md text-[10px] font-bold font-time", pos.text, pos.bg)}>
+                          {r.players.primary_position?.slice(0, 3) || "?"}
+                        </span>
+                        {r.players.age_range && (
+                          <span className="text-[10px] text-muted-foreground font-time">{r.players.age_range}</span>
+                        )}
+                      </div>
                     </div>
                   </div>
 
                   {/* Time + bar */}
-                  <div>
-                    <div className={cn(
-                      "text-2xl font-bold font-time leading-none mb-1.5",
-                      isFirst ? "text-emerald-400" : isLast ? "text-red-400" : "text-foreground"
-                    )}>
-                      {formatBroncho(r.bronco_mins)}
+                  {r.bronco_mins !== null ? (
+                    <div>
+                      <div className={cn(
+                        "text-2xl font-bold font-time leading-none mb-1.5",
+                        isFirst ? "text-emerald-400" : isLast ? "text-red-400" : "text-foreground"
+                      )}>
+                        {formatBroncho(r.bronco_mins)}
+                      </div>
+                      <div className="h-1 rounded-full bg-muted overflow-hidden">
+                        <div
+                          className={cn("h-full rounded-full transition-all duration-500",
+                            isFirst ? "bg-emerald-400" : isLast ? "bg-red-400" : "bg-indigo-400"
+                          )}
+                          style={{ width: `${barPct}%` }}
+                        />
+                      </div>
                     </div>
-                    <div className="h-1 rounded-full bg-muted overflow-hidden">
-                      <div
-                        className={cn("h-full rounded-full transition-all duration-500",
-                          isFirst ? "bg-emerald-400" : isLast ? "bg-red-400" : "bg-indigo-400"
-                        )}
-                        style={{ width: `${barPct}%` }}
-                      />
-                    </div>
-                  </div>
+                  ) : (
+                    <div className="text-xs text-muted-foreground italic">No broncho time</div>
+                  )}
 
-                  {/* Sprint times if present */}
-                  {(r.ten_m_1 !== null || r.twenty_m_1 !== null || r.forty_m_1 !== null) && (
-                    <div className="flex gap-3 pt-0.5">
+                  {/* Sprint times */}
+                  {(r.ten_m_1 !== null || r.twenty_m_1 !== null || r.forty_m_1 !== null || r.mas_ms !== null) && (
+                    <div className="flex flex-wrap gap-3 pt-0.5">
+                      {r.mas_ms !== null && <span className="text-[11px] text-muted-foreground font-time">MAS: {r.mas_ms}m/s</span>}
                       {r.ten_m_1 !== null && <span className="text-[11px] text-muted-foreground font-time">10m: {r.ten_m_1.toFixed(2)}s</span>}
                       {r.twenty_m_1 !== null && <span className="text-[11px] text-muted-foreground font-time">20m: {r.twenty_m_1.toFixed(2)}s</span>}
                       {r.forty_m_1 !== null && <span className="text-[11px] text-muted-foreground font-time">40m: {r.forty_m_1.toFixed(2)}s</span>}
@@ -246,17 +472,21 @@ function SessionDetail({
                       {isFirst ? "Best time" : "Slowest"}
                     </div>
                   )}
+
+                  {/* Inline edit form */}
+                  {isEditing && (
+                    <InlineEditForm
+                      form={editForm}
+                      saving={saving}
+                      onChange={setEditForm}
+                      onSave={handleSaveEdit}
+                      onCancel={() => setEditingId(null)}
+                    />
+                  )}
                 </div>
               );
             })}
           </div>
-        </div>
-      )}
-
-      {/* Players with results but no bronco (edge case) */}
-      {results.length > participants.length && (
-        <div className="text-xs text-muted-foreground">
-          {results.length - participants.length} player{results.length - participants.length !== 1 ? "s" : ""} attended but have no Broncho score recorded.
         </div>
       )}
 
@@ -266,15 +496,41 @@ function SessionDetail({
           <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
             Absent — {absentees.length} not tested
           </div>
-          <div className="bg-card border border-border rounded-xl p-4">
+          <div className="bg-card border border-border rounded-xl p-4 space-y-2">
             <div className="flex flex-wrap gap-2">
               {absentees.map((p) => {
                 const pos = getPos(p.primary_position);
+                const addKey = `add:${p.id}`;
+                const isAdding = editingId === addKey;
                 return (
-                  <div key={p.id} className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-muted/60 border border-border/50">
-                    <span className={cn("text-[10px] font-bold font-time", pos.text)}>{p.primary_position || "?"}</span>
-                    <span className="text-sm text-foreground">{p.name}</span>
-                    <span className="text-[10px] text-muted-foreground font-time">{p.code}</span>
+                  <div key={p.id} className={cn(
+                    "rounded-lg border border-border/50 overflow-hidden",
+                    isAdding ? "w-full" : "inline-block"
+                  )}>
+                    <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-muted/60">
+                      <span className={cn("text-[10px] font-bold font-time", pos.text)}>{p.primary_position?.slice(0, 3) || "?"}</span>
+                      <span className="text-sm text-foreground">{p.name}</span>
+                      <span className="text-[10px] text-muted-foreground font-time">{p.code}</span>
+                      {editMode && !isAdding && (
+                        <button
+                          onClick={() => handleStartAdd(p.id)}
+                          className="ml-1 text-[10px] text-indigo-400 hover:text-indigo-300 font-semibold"
+                        >
+                          + Add
+                        </button>
+                      )}
+                    </div>
+                    {isAdding && (
+                      <div className="p-3 border-t border-border/50">
+                        <InlineEditForm
+                          form={editForm}
+                          saving={saving}
+                          onChange={setEditForm}
+                          onSave={() => handleSaveAdd(p.id)}
+                          onCancel={() => setEditingId(null)}
+                        />
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -561,7 +817,7 @@ export default function FitnessTests() {
     <div className="space-y-5">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-serif font-normal tracking-tight text-foreground">Fitness <span className="text-indigo-500 dark:text-indigo-400">Tests</span></h1>
+          <h1 className="text-3xl font-semibold tracking-tight text-foreground">Fitness <span className="text-indigo-500 dark:text-indigo-400">Tests</span></h1>
           <p className="text-sm text-muted-foreground mt-1">{sessions.length} session{sessions.length !== 1 ? "s" : ""}</p>
         </div>
         <button

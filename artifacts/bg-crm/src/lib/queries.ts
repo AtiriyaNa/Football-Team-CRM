@@ -84,6 +84,23 @@ export async function bulkInsertResults(results: Omit<TestResult, "id" | "create
   if (error) throw error;
 }
 
+export async function updateResult(id: string, updates: Partial<TestResult>): Promise<TestResult> {
+  const { data, error } = await supabase.from("test_results").update(updates).eq("id", id).select().single();
+  if (error) throw error;
+  return data as TestResult;
+}
+
+export async function deleteResult(id: string): Promise<void> {
+  const { error } = await supabase.from("test_results").delete().eq("id", id);
+  if (error) throw error;
+}
+
+export async function insertResult(result: Omit<TestResult, "id" | "created_at">): Promise<TestResult> {
+  const { data, error } = await supabase.from("test_results").insert(result).select().single();
+  if (error) throw error;
+  return data as TestResult;
+}
+
 // Most improved player: finds player with the biggest Broncho improvement (lower is better)
 // Compares first-ever result to most-recent result per player
 export async function fetchMostImprovedPlayer(team: string): Promise<{ name: string; improvementSecs: number } | null> {
