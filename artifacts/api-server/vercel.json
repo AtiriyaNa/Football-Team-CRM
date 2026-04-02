@@ -1,14 +1,5 @@
 {
-  "installCommand": "cd ../.. && pnpm install",
+  "installCommand": "corepack enable && cd ../.. && pnpm install",
   "buildCommand": "node ./build.mjs",
-  "builds": [
-    {
-      "src": "api/index.js",
-      "use": "@vercel/node",
-      "config": { "includeFiles": "dist/handler.mjs" }
-    }
-  ],
-  "routes": [
-    { "src": "/(.*)", "dest": "/api/index" }
-  ]
+  "rewrites": [{ "source": "/:path*", "destination": "/api/index" }]
 }
