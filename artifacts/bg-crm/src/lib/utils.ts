@@ -36,7 +36,8 @@ export function calcAgeRange(yearOfBirth: number | null): "U18" | "18-24" | "25+
   return "25+";
 }
 
-export function positionColor(position: string): string {
+export function positionColor(position: string | null | undefined): string {
+  if (!position) return "text-gray-400";
   const p = position.toLowerCase();
   if (p === "goalkeeper") return "text-amber-400";
   if (p === "defender") return "text-indigo-400";
