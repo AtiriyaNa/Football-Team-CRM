@@ -1,6 +1,9 @@
 {
   "functions": {
-    "api/index.js": { "maxDuration": 10 }
+    "api/index.js": {
+      "maxDuration": 10,
+      "includeFiles": "dist/handler.mjs"
+    }
   },
-  "rewrites": [{ "source": "/(.*)", "destination": "/api/index" }]
+  "rewrites": [{ "source": "/:path*", "destination": "/api/index" }]
 }
