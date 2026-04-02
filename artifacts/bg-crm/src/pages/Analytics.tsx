@@ -258,24 +258,8 @@ export default function Analytics() {
       </div>
 
       {/* Filters row */}
-      {(availableTypes.length > 0 || chronoSessions.length > 1) && (
+      {chronoSessions.length > 1 && (
         <div className="flex flex-wrap items-center gap-x-5 gap-y-2 mb-5">
-          {availableTypes.length > 0 && (
-            <div className="flex flex-wrap items-center gap-1.5">
-              <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mr-1">Type</span>
-              {["all", ...availableTypes].map((t) => (
-                <button key={t} onClick={() => setTypeFilter(t)}
-                  className={cn("px-3 py-1 rounded-full text-xs font-medium transition-colors border",
-                    validTypeFilter === t
-                      ? "bg-indigo-500/15 text-indigo-400 border-indigo-500/30"
-                      : "text-muted-foreground border-transparent hover:border-border hover:text-foreground"
-                  )}>
-                  {t === "all" ? "All types" : t}
-                </button>
-              ))}
-            </div>
-          )}
-
           {/* Session multi-select dropdown */}
           {chronoSessions.length > 1 && (
             <div className="relative">
@@ -1355,8 +1339,10 @@ export default function Analytics() {
                       <tr className="border-b border-border">
                         <th className="pb-2 text-left text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Player</th>
                         <th className="pb-2 text-left text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Latest</th>
+                        <th className="pb-2 text-left text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Avg / round</th>
                         <th className="pb-2 text-left text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Current band</th>
                         <th className="pb-2 text-left text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Target</th>
+                        <th className="pb-2 text-left text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Goal avg / round</th>
                         <th className="pb-2 text-left text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Gap</th>
                       </tr>
                     </thead>
@@ -1373,6 +1359,7 @@ export default function Analytics() {
                               </div>
                             </td>
                             <td className="py-2.5 font-time text-xs text-foreground">{formatBroncho(bronco)}</td>
+                            <td className="py-2.5 font-time text-xs text-muted-foreground">{formatBroncho(bronco! / 5)}</td>
                             <td className="py-2.5">
                               <span className="inline-block px-2 py-0.5 rounded-full text-[11px] font-semibold"
                                 style={{ backgroundColor: band.color + "20", color: band.color }}>
@@ -1385,10 +1372,13 @@ export default function Analytics() {
                                 : <span className="text-amber-400 font-semibold">World Record ✓</span>
                               }
                             </td>
+                            <td className="py-2.5 font-time text-xs text-muted-foreground">
+                              {target ? formatBroncho(target.boundary / 5) : "—"}
+                            </td>
                             <td className="py-2.5">
                               {target
                                 ? <span className={cn("inline-block px-2 py-0.5 rounded-full text-[11px] font-time", target.isGlobal ? "bg-violet-400/10 text-violet-400" : "bg-blue-400/10 text-blue-400")}>
-                                    −{target.gapSecs}s → {target.nextBand}
+                                    −{target.gapSecs}s → {target.isGlobal ? `Global ${target.nextBand}` : target.nextBand}
                                   </span>
                                 : <span className="text-[11px] text-muted-foreground">—</span>
                               }
