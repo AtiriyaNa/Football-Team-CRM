@@ -901,6 +901,7 @@ export default function Analytics() {
               const yMin = Math.min(...scatterData.map((d) => d.y));
               const yMax = Math.max(...scatterData.map((d) => d.y));
               const yPad = 0.08;
+              const yAvg = scatterData.length > 0 ? scatterData.reduce((a, b) => a + b.y, 0) / scatterData.length : null;
 
               // Custom dot: circle + initials
               const CustomDot = (props: any) => {
@@ -978,9 +979,19 @@ export default function Analytics() {
                             tickFormatter={(v) => formatBroncho(v)}
                             tick={{ fill: chartAxis, fontSize: 10 }}
                             width={46}
+                            tickCount={10}
                           />
                           <ZAxis range={[1, 1]} />
                           <Tooltip content={<CustomTooltip />} cursor={false} />
+                          {yAvg !== null && (
+                            <ReferenceLine
+                              y={yAvg}
+                              stroke="#fbbf24"
+                              strokeDasharray="5 3"
+                              strokeWidth={1.5}
+                              label={{ value: `Avg ${formatBroncho(yAvg)}`, position: "insideTopRight", fill: "#fbbf24", fontSize: 9, fontWeight: 600 }}
+                            />
+                          )}
                           <Scatter data={scatterData} shape={<CustomDot />} isAnimationActive={false} />
                         </ScatterChart>
                       </ResponsiveContainer>
@@ -1003,6 +1014,12 @@ export default function Analytics() {
                               );
                             })
                         }
+                        {yAvg !== null && (
+                          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                            <div className="w-4 h-[2px] rounded-full bg-amber-400" />
+                            Avg {formatBroncho(yAvg)}
+                          </div>
+                        )}
                       </div>
                     </>
                   )}
