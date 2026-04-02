@@ -111,12 +111,13 @@ interface EnrichedResult extends TestResult {
   test_sessions?: Pick<TestSession, "test_date" | "test_name" | "type">;
 }
 
-const TABS = ["overview", "compare", "benchmarks", "position", "age"] as const;
+const TABS = ["overview", "compare", "bands", "benchmarks", "position", "age"] as const;
 type TabId = typeof TABS[number];
 const TAB_LABELS: Record<TabId, string> = {
   overview:   "Overview",
   compare:    "Compare",
-  benchmarks: "Benchmarks",
+  bands:      "Team Bands",
+  benchmarks: "Global Benchmarks",
   position:   "By Position",
   age:        "By Age Group",
 };
@@ -902,6 +903,15 @@ export default function Analytics() {
               const yMax = Math.max(...scatterData.map((d) => d.y));
               const yPad = 0.08;
               const yAvg = scatterData.length > 0 ? scatterData.reduce((a, b) => a + b.y, 0) / scatterData.length : null;
+              const sortedY = [...scatterData.map((d) => d.y)].sort((a, b) => a - b);
+              const calcPercentile = (arr: number[], p: number) => {
+                if (arr.length === 0) return null;
+                const idx = (p / 100) * (arr.length - 1);
+                const lo = Math.floor(idx), hi = Math.ceil(idx);
+                return arr[lo] + (idx - lo) * (arr[hi] - arr[lo]);
+              };
+              const yQ1 = calcPercentile(sortedY, 25);
+              const yQ3 = calcPercentile(sortedY, 75);
 
               // Custom dot: circle + initials
               const CustomDot = (props: any) => {
@@ -983,6 +993,24 @@ export default function Analytics() {
                           />
                           <ZAxis range={[1, 1]} />
                           <Tooltip content={<CustomTooltip />} cursor={false} />
+                          {yQ1 !== null && (
+                            <ReferenceLine
+                              y={yQ1}
+                              stroke="#a78bfa"
+                              strokeDasharray="4 3"
+                              strokeWidth={1.5}
+                              label={{ value: `Q1 ${formatBroncho(yQ1)}`, position: "insideTopRight", fill: "#a78bfa", fontSize: 9, fontWeight: 600 }}
+                            />
+                          )}
+                          {yQ3 !== null && (
+                            <ReferenceLine
+                              y={yQ3}
+                              stroke="#a78bfa"
+                              strokeDasharray="4 3"
+                              strokeWidth={1.5}
+                              label={{ value: `Q3 ${formatBroncho(yQ3)}`, position: "insideTopRight", fill: "#a78bfa", fontSize: 9, fontWeight: 600 }}
+                            />
+                          )}
                           {yAvg !== null && (
                             <ReferenceLine
                               y={yAvg}
@@ -1014,6 +1042,12 @@ export default function Analytics() {
                               );
                             })
                         }
+                        {yQ1 !== null && yQ3 !== null && (
+                          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                            <div className="w-4 h-[2px] rounded-full bg-violet-400" />
+                            Q1 {formatBroncho(yQ1)} · Q3 {formatBroncho(yQ3)}
+                          </div>
+                        )}
                         {yAvg !== null && (
                           <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                             <div className="w-4 h-[2px] rounded-full bg-amber-400" />
@@ -1191,6 +1225,180 @@ export default function Analytics() {
             {selected.length === 0 && !loading && pickable.length > 0 && (
               <div className="bg-card border border-dashed border-border rounded-2xl p-10 text-center">
                 <div className="text-sm text-muted-foreground">Select players above to compare their performance</div>
+              </div>
+            )}
+          </div>
+        );
+      })()}
+
+      {tab === "bands" && (() => {
+        const vals = benchmarkData.map((d) => d.bronco!);
+        const calcQ = (arr: number[], p: number) => {
+          if (arr.length === 0) return null;
+          const idx = (p / 100) * (arr.length - 1);
+          const lo = Math.floor(idx), hi = Math.ceil(idx);
+          return arr[lo] + (idx - lo) * ((arr[hi] ?? arr[lo]) - arr[lo]);
+        };
+        const q1 = calcQ(vals, 25);
+        const q2 = calcQ(vals, 50);
+        const q3 = calcQ(vals, 75);
+
+        const BANDS = [
+          { key: "top",    label: "Top 25%",    description: "Fastest quartile",       color: "#34d399", targetLabel: null },
+          { key: "upper",  label: "Upper Mid",  description: "50–75th percentile",     color: "#60a5fa", targetLabel: "Top 25%" },
+          { key: "lower",  label: "Lower Mid",  description: "25–50th percentile",     color: "#fbbf24", targetLabel: "Upper Mid" },
+          { key: "bottom", label: "Bottom 25%", description: "Slowest quartile",       color: "#f87171", targetLabel: "Lower Mid" },
+        ] as const;
+
+        const getPlayerBand = (bronco: number) => {
+          if (q1 !== null && bronco <= q1) return BANDS[0];
+          if (q2 !== null && bronco <= q2) return BANDS[1];
+          if (q3 !== null && bronco <= q3) return BANDS[2];
+          return BANDS[3];
+        };
+
+        const getTarget = (bronco: number): { boundary: number; gapSecs: number; nextBand: string; isGlobal?: boolean } | null => {
+          if (q1 === null || q2 === null || q3 === null) return null;
+          if (bronco <= q1) {
+            // Top of squad — aim for next global tier
+            const tierIdx = BRONCHO_TIERS.findIndex((t) => bronco >= t.minMins && bronco < t.maxMins);
+            if (tierIdx <= 0) return null; // already World Record
+            const nextTier = BRONCHO_TIERS[tierIdx - 1];
+            return { boundary: nextTier.maxMins, gapSecs: Math.round((bronco - nextTier.maxMins) * 60), nextBand: nextTier.label, isGlobal: true };
+          }
+          if (bronco <= q2) return { boundary: q1, gapSecs: Math.round((bronco - q1) * 60), nextBand: "Top 25%" };
+          if (bronco <= q3) return { boundary: q2, gapSecs: Math.round((bronco - q2) * 60), nextBand: "Upper Mid" };
+          return { boundary: q3, gapSecs: Math.round((bronco - q3) * 60), nextBand: "Lower Mid" };
+        };
+
+        return (
+          <div className="space-y-4">
+            {/* Quartile boundary strip */}
+            <div className="bg-card border border-border rounded-2xl overflow-hidden">
+              <div className="px-5 pt-5 pb-3">
+                <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-0.5">Team quartile boundaries</div>
+                <p className="text-[11px] text-muted-foreground">Latest result per player · {benchmarkData.length} players · lower = faster · updates each test</p>
+              </div>
+              {loading ? <ChartSkeleton height={80} /> : q1 === null ? (
+                <div className="px-5 pb-5"><EmptyState title="No data yet" description="Record fitness test sessions first" /></div>
+              ) : (
+                <div className="grid grid-cols-3 divide-x divide-border border-t border-border">
+                  <div className="px-5 py-4">
+                    <div className="text-[10px] font-semibold uppercase tracking-widest mb-1" style={{ color: "#34d399" }}>Q1 · Top boundary</div>
+                    <div className="text-2xl font-bold font-time text-foreground">{formatBroncho(q1)}</div>
+                    <div className="text-[11px] text-muted-foreground mt-0.5">Beat this → Top 25%</div>
+                  </div>
+                  <div className="px-5 py-4">
+                    <div className="text-[10px] font-semibold uppercase tracking-widest mb-1" style={{ color: "#60a5fa" }}>Median · Mid boundary</div>
+                    <div className="text-2xl font-bold font-time text-foreground">{formatBroncho(q2!)}</div>
+                    <div className="text-[11px] text-muted-foreground mt-0.5">Beat this → Upper Mid</div>
+                  </div>
+                  <div className="px-5 py-4">
+                    <div className="text-[10px] font-semibold uppercase tracking-widest mb-1" style={{ color: "#fbbf24" }}>Q3 · Lower boundary</div>
+                    <div className="text-2xl font-bold font-time text-foreground">{formatBroncho(q3!)}</div>
+                    <div className="text-[11px] text-muted-foreground mt-0.5">Beat this → Lower Mid</div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Band swimlanes */}
+            {!loading && q1 !== null && (
+              <div className="bg-card border border-border rounded-2xl p-5">
+                <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-4">Players by band</div>
+                <div className="space-y-3">
+                  {BANDS.map((band) => {
+                    const inBand = benchmarkData.filter(({ bronco }) => {
+                      if (band.key === "top")    return bronco! <= q1!;
+                      if (band.key === "upper")  return bronco! > q1! && bronco! <= q2!;
+                      if (band.key === "lower")  return bronco! > q2! && bronco! <= q3!;
+                      return bronco! > q3!;
+                    });
+                    return (
+                      <div key={band.key} className="rounded-xl border p-3" style={{ backgroundColor: band.color + "10", borderColor: band.color + "30" }}>
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-bold" style={{ color: band.color }}>{band.label}</span>
+                            <span className="text-[11px] text-muted-foreground">{band.description}</span>
+                          </div>
+                          <span className="text-xs font-bold font-time" style={{ color: band.color }}>{inBand.length} player{inBand.length !== 1 ? "s" : ""}</span>
+                        </div>
+                        {inBand.length > 0 ? (
+                          <div className="flex flex-wrap gap-2">
+                            {inBand.map(({ player, bronco }) => (
+                              <div key={player.id} className="flex items-center gap-1.5 px-2 py-1 rounded-lg"
+                                style={{ backgroundColor: band.color + "18", border: `1px solid ${band.color}30` }}>
+                                <PosBadge pos={player.primary_position} />
+                                <span className="text-xs text-foreground font-medium">{player.name}</span>
+                                <span className="text-[11px] font-time text-muted-foreground">{formatBroncho(bronco)}</span>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="text-[11px] text-muted-foreground/50 italic">No players in this band</div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Next test targets table */}
+            {!loading && q1 !== null && (
+              <div className="bg-card border border-border rounded-2xl p-5">
+                <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-1">Next test targets</div>
+                <p className="text-[11px] text-muted-foreground mb-4">How many seconds each player needs to improve to reach the next band</p>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-border">
+                        <th className="pb-2 text-left text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Player</th>
+                        <th className="pb-2 text-left text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Latest</th>
+                        <th className="pb-2 text-left text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Current band</th>
+                        <th className="pb-2 text-left text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Target</th>
+                        <th className="pb-2 text-left text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Gap</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {benchmarkData.map(({ player, bronco }) => {
+                        const band = getPlayerBand(bronco!);
+                        const target = getTarget(bronco!);
+                        return (
+                          <tr key={player.id} className="border-b border-border/50 last:border-0 hover:bg-muted/30 transition-colors">
+                            <td className="py-2.5">
+                              <div className="flex items-center gap-2">
+                                <PosBadge pos={player.primary_position} />
+                                <span className="text-xs font-medium text-foreground">{player.name}</span>
+                              </div>
+                            </td>
+                            <td className="py-2.5 font-time text-xs text-foreground">{formatBroncho(bronco)}</td>
+                            <td className="py-2.5">
+                              <span className="inline-block px-2 py-0.5 rounded-full text-[11px] font-semibold"
+                                style={{ backgroundColor: band.color + "20", color: band.color }}>
+                                {band.label}
+                              </span>
+                            </td>
+                            <td className="py-2.5 font-time text-xs">
+                              {target
+                                ? <span style={{ color: target.isGlobal ? "#a78bfa" : "#60a5fa" }}>{formatBroncho(target.boundary)}</span>
+                                : <span className="text-amber-400 font-semibold">World Record ✓</span>
+                              }
+                            </td>
+                            <td className="py-2.5">
+                              {target
+                                ? <span className={cn("inline-block px-2 py-0.5 rounded-full text-[11px] font-time", target.isGlobal ? "bg-violet-400/10 text-violet-400" : "bg-blue-400/10 text-blue-400")}>
+                                    −{target.gapSecs}s → {target.nextBand}
+                                  </span>
+                                : <span className="text-[11px] text-muted-foreground">—</span>
+                              }
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             )}
           </div>
