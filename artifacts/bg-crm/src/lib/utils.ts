@@ -37,11 +37,11 @@ export function calcAgeRange(yearOfBirth: number | null): "U18" | "18-24" | "25+
 }
 
 export function positionColor(position: string): string {
-  const p = position.toUpperCase();
-  if (p === "GK") return "text-yellow-400";
-  if (["CB", "LB", "RB", "WB"].includes(p)) return "text-blue-400";
-  if (["CDM", "CM", "CAM"].includes(p)) return "text-green-400";
-  if (["LW", "RW", "ST", "CF", "SS"].includes(p)) return "text-red-400";
+  const p = position.toLowerCase();
+  if (p === "goalkeeper") return "text-amber-400";
+  if (p === "defender") return "text-indigo-400";
+  if (p === "midfielder") return "text-blue-400";
+  if (p === "forward") return "text-red-400";
   return "text-gray-400";
 }
 

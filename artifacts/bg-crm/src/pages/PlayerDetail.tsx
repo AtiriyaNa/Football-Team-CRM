@@ -10,7 +10,13 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { ArrowLeft, Edit, Save, X, Timer, Dumbbell, ChevronLeft, ChevronRight } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
-const POSITIONS = ["GK", "CB", "LB", "RB", "WB", "CDM", "CM", "CAM", "LW", "RW", "ST", "CF", "SS"];
+const PRIMARY_POSITIONS = ["Goalkeeper", "Defender", "Midfielder", "Forward"];
+const SECONDARY_POSITIONS: Record<string, string[]> = {
+  Goalkeeper: ["Sweeper Keeper"],
+  Defender:   ["Center Back", "Left Back", "Right Back", "Wing Back"],
+  Midfielder: ["Defensive Midfielder", "Central Midfielder", "Central Attacking Midfielder", "Left Midfielder", "Right Midfielder"],
+  Forward:    ["Striker", "Center Forward", "Left Winger", "Right Winger", "Second Striker"],
+};
 
 export default function PlayerDetail() {
   const { id } = useParams<{ id: string }>();
@@ -138,13 +144,16 @@ export default function PlayerDetail() {
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-2 border-t border-border">
             <div>
               <label className="block text-xs text-muted-foreground mb-1">Primary Position</label>
-              <select value={editForm.primary_position ?? ""} onChange={(e) => setEditForm({ ...editForm, primary_position: e.target.value })} className="w-full bg-muted border border-border rounded px-2 py-1.5 text-sm text-foreground">
-                {POSITIONS.map((p) => <option key={p} value={p}>{p}</option>)}
+              <select value={editForm.primary_position ?? ""} onChange={(e) => setEditForm({ ...editForm, primary_position: e.target.value, secondary_position: null })} className="w-full bg-muted border border-border rounded px-2 py-1.5 text-sm text-foreground">
+                {PRIMARY_POSITIONS.map((p) => <option key={p} value={p}>{p}</option>)}
               </select>
             </div>
             <div>
               <label className="block text-xs text-muted-foreground mb-1">Secondary Position</label>
-              <input value={editForm.secondary_position ?? ""} onChange={(e) => setEditForm({ ...editForm, secondary_position: e.target.value || null })} className="w-full bg-muted border border-border rounded px-2 py-1.5 text-sm text-foreground" />
+              <select value={editForm.secondary_position ?? ""} onChange={(e) => setEditForm({ ...editForm, secondary_position: e.target.value || null })} className="w-full bg-muted border border-border rounded px-2 py-1.5 text-sm text-foreground">
+                <option value="">— None —</option>
+                {(SECONDARY_POSITIONS[editForm.primary_position ?? ""] ?? []).map((p) => <option key={p} value={p}>{p}</option>)}
+              </select>
             </div>
             <div>
               <label className="block text-xs text-muted-foreground mb-1">Year of Birth</label>
@@ -164,26 +173,34 @@ export default function PlayerDetail() {
           </div>
         )}
 
-        {/* Latest stats */}
-        {latestResult && (
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-4 border-t border-border mt-4">
-            {[
-              { label: "Broncho", value: formatBroncho(latestResult.bronco_mins) },
-              { label: "MAS (m/s)", value: latestResult.mas_ms !== null ? latestResult.mas_ms.toFixed(2) : "—" },
-              { label: "10m Sprint 1", value: latestResult.ten_m_1 !== null ? latestResult.ten_m_1.toFixed(2) + "s" : "—" },
-              { label: "20m Sprint 1", value: latestResult.twenty_m_1 !== null ? latestResult.twenty_m_1.toFixed(2) + "s" : "—" },
-            ].map(({ label, value }) => (
-              <div key={label}>
-                <div className="text-xs text-muted-foreground mb-0.5">{label}</div>
-                <div className="text-lg font-bold font-time text-foreground">{value}</div>
+        {/* Best + latest stats */}
+        {results.length > 0 && (() => {
+          const bestBronco = results.reduce<number | null>((best, r) => r.bronco_mins !== null && (best === null || r.bronco_mins < best) ? r.bronco_mins : best, null);
+          const bestMas    = results.reduce<number | null>((best, r) => r.mas_ms !== null    && (best === null || r.mas_ms > best)    ? r.mas_ms    : best, null);
+          const bestTen    = results.reduce<number | null>((best, r) => r.ten_m_1 !== null   && (best === null || r.ten_m_1 < best)   ? r.ten_m_1   : best, null);
+          const bestTwenty = results.reduce<number | null>((best, r) => r.twenty_m_1 !== null && (best === null || r.twenty_m_1 < best) ? r.twenty_m_1 : best, null);
+          const stats = [
+            { label: "Broncho",     best: formatBroncho(bestBronco),                                       latest: formatBroncho(latestResult?.bronco_mins) },
+            { label: "MAS (m/s)",   best: bestMas    !== null ? bestMas.toFixed(2)    : "—",               latest: latestResult?.mas_ms    !== null ? latestResult!.mas_ms!.toFixed(2)    + "" : "—" },
+            { label: "10m Sprint",  best: bestTen    !== null ? bestTen.toFixed(2)    + "s" : "—",         latest: latestResult?.ten_m_1   !== null ? latestResult!.ten_m_1!.toFixed(2)   + "s" : "—" },
+            { label: "20m Sprint",  best: bestTwenty !== null ? bestTwenty.toFixed(2) + "s" : "—",         latest: latestResult?.twenty_m_1 !== null ? latestResult!.twenty_m_1!.toFixed(2) + "s" : "—" },
+          ];
+          return (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-4 border-t border-border mt-4">
+              {stats.map(({ label, best, latest }) => (
+                <div key={label}>
+                  <div className="text-xs text-muted-foreground mb-0.5">{label}</div>
+                  <div className="text-lg font-bold font-time text-foreground">{best}</div>
+                  {best !== latest && <div className="text-[11px] font-time text-muted-foreground/60 mt-0.5">Latest: {latest}</div>}
+                </div>
+              ))}
+              <div className="sm:col-span-4 flex items-center gap-2">
+                <span className="text-xs text-muted-foreground">Latest tier:</span>
+                <MasBadge mas={latestResult?.mas_ms ?? null} />
               </div>
-            ))}
-            <div className="sm:col-span-4 flex items-center gap-2">
-              <span className="text-xs text-muted-foreground">Tier:</span>
-              <MasBadge mas={latestResult.mas_ms} />
             </div>
-          </div>
-        )}
+          );
+        })()}
       </div>
 
       {/* Broncho over time chart */}

@@ -561,7 +561,7 @@ export default function FitnessTests() {
     <div className="space-y-5">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-serif font-normal tracking-tight text-foreground">Fitness <em className="italic text-indigo-500 dark:text-indigo-400 not-italic font-serif">Tests</em></h1>
+          <h1 className="text-3xl font-serif font-normal tracking-tight text-foreground">Fitness <span className="text-indigo-500 dark:text-indigo-400">Tests</span></h1>
           <p className="text-sm text-muted-foreground mt-1">{sessions.length} session{sessions.length !== 1 ? "s" : ""}</p>
         </div>
         <button

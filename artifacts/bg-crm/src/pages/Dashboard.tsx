@@ -89,7 +89,7 @@ export default function Dashboard() {
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-3xl font-serif font-normal tracking-tight text-foreground">{team} <em className="italic text-indigo-500 dark:text-indigo-400 not-italic font-serif">— Dashboard</em></h1>
+          <h1 className="text-3xl font-serif font-normal tracking-tight text-foreground">{team} <span className="text-indigo-500 dark:text-indigo-400">— Dashboard</span></h1>
           <p className="text-sm text-muted-foreground mt-1">
             {latestSession ? `Latest: ${latestSession.test_name} · ${latestSession.test_date}` : "No sessions recorded yet"}
           </p>
@@ -115,7 +115,7 @@ export default function Dashboard() {
               value={mostImproved?.name ?? "—"}
               icon={TrendingUp}
               highlight={!!mostImproved}
-              sub={mostImproved ? `↓ ${mostImproved.improvementSecs}s improvement` : "Need 2+ sessions"}
+              sub={mostImproved ? `− ${mostImproved.improvementSecs}s improvement` : "Need 2+ sessions"}
             />
             <MetricCard
               title="Not Yet Tested"

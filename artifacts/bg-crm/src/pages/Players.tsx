@@ -10,7 +10,13 @@ import type { Player } from "@/lib/types";
 import { Users, Plus, Search, ChevronRight } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
-const POSITIONS = ["GK", "CB", "LB", "RB", "WB", "CDM", "CM", "CAM", "LW", "RW", "ST", "CF", "SS"];
+const PRIMARY_POSITIONS = ["Goalkeeper", "Defender", "Midfielder", "Forward"];
+const SECONDARY_POSITIONS: Record<string, string[]> = {
+  Goalkeeper: ["Sweeper Keeper"],
+  Defender:   ["Center Back", "Left Back", "Right Back", "Wing Back"],
+  Midfielder: ["Defensive Midfielder", "Central Midfielder", "Central Attacking Midfielder", "Left Midfielder", "Right Midfielder"],
+  Forward:    ["Striker", "Center Forward", "Left Winger", "Right Winger", "Second Striker"],
+};
 const AGE_RANGES = ["U18", "18-24", "25+"];
 
 function AddPlayerModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
@@ -19,7 +25,7 @@ function AddPlayerModal({ onClose, onSaved }: { onClose: () => void; onSaved: ()
   const [form, setForm] = useState({
     name: "",
     code: "",
-    primary_position: "GK",
+    primary_position: "Goalkeeper",
     secondary_position: "",
     year_of_birth: "",
     team: "Sharks" as "Sharks" | "Wildcats",
@@ -88,14 +94,23 @@ function AddPlayerModal({ onClose, onSaved }: { onClose: () => void; onSaved: ()
             {field("Primary Position", (
               <select
                 value={form.primary_position}
-                onChange={(e) => setForm({ ...form, primary_position: e.target.value })}
+                onChange={(e) => setForm({ ...form, primary_position: e.target.value, secondary_position: "" })}
                 className="w-full bg-muted border border-border rounded-md px-3 py-1.5 text-sm text-foreground"
                 data-testid="select-primary-position"
               >
-                {POSITIONS.map((p) => <option key={p} value={p}>{p}</option>)}
+                {PRIMARY_POSITIONS.map((p) => <option key={p} value={p}>{p}</option>)}
               </select>
             ))}
-            {field("Secondary Position", input("secondary_position", { placeholder: "Optional" }))}
+            {field("Secondary Position", (
+              <select
+                value={form.secondary_position}
+                onChange={(e) => setForm({ ...form, secondary_position: e.target.value })}
+                className="w-full bg-muted border border-border rounded-md px-3 py-1.5 text-sm text-foreground"
+              >
+                <option value="">— None —</option>
+                {(SECONDARY_POSITIONS[form.primary_position] ?? []).map((p) => <option key={p} value={p}>{p}</option>)}
+              </select>
+            ))}
           </div>
           <div className="grid grid-cols-2 gap-3">
             {field("Year of Birth", input("year_of_birth", { type: "number", placeholder: "e.g. 2003", "data-testid": "input-year-of-birth" }))}
@@ -179,7 +194,7 @@ export default function Players() {
     <div className="space-y-5">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-3xl font-serif font-normal tracking-tight text-foreground">{team} <em className="italic text-indigo-500 dark:text-indigo-400 not-italic font-serif">— Players</em></h1>
+          <h1 className="text-3xl font-serif font-normal tracking-tight text-foreground">{team} <span className="text-indigo-500 dark:text-indigo-400">— Players</span></h1>
           <p className="text-sm text-muted-foreground mt-1">{players.filter((p) => p.is_active).length} active players</p>
         </div>
         <div className="flex items-center gap-2">
@@ -215,7 +230,7 @@ export default function Players() {
           data-testid="select-filter-position"
         >
           <option value="">All positions</option>
-          {POSITIONS.map((p) => <option key={p} value={p}>{p}</option>)}
+          {PRIMARY_POSITIONS.map((p) => <option key={p} value={p}>{p}</option>)}
         </select>
         <select
           value={filterAge}

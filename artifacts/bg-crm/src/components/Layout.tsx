@@ -77,7 +77,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 Bombay Gymkhana
               </div>
               <div className="text-base font-serif font-normal leading-tight truncate text-foreground">
-                Women's <em className="italic text-indigo-500 dark:text-indigo-400">Football</em>
+                Women's <span className="text-indigo-500 dark:text-indigo-400">Football</span>
               </div>
             </div>
           </div>
