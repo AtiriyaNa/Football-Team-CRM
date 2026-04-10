@@ -202,6 +202,25 @@ export default function Analytics() {
       .sort((a, b) => a.bronco! - b.bronco!); // ascending: best (fastest) first
   }, [playerComparisons]);
 
+  // Team band lookup from quartiles
+  const getTeamBand = useMemo(() => {
+    const vals = benchmarkData.map((d) => d.bronco!);
+    const calcQ = (arr: number[], p: number) => {
+      if (arr.length === 0) return null;
+      const idx = (p / 100) * (arr.length - 1);
+      const lo = Math.floor(idx), hi = Math.ceil(idx);
+      return arr[lo] + (idx - lo) * ((arr[hi] ?? arr[lo]) - arr[lo]);
+    };
+    const q1 = calcQ(vals, 25), q2 = calcQ(vals, 50), q3 = calcQ(vals, 75);
+    return (bronco: number | null): { label: string; color: string } | null => {
+      if (bronco === null || q1 === null || q2 === null || q3 === null) return null;
+      if (bronco <= q1) return { label: "Top 25%",    color: "#34d399" };
+      if (bronco <= q2) return { label: "Upper Mid",  color: "#60a5fa" };
+      if (bronco <= q3) return { label: "Lower Mid",  color: "#fbbf24" };
+      return                    { label: "Bottom 25%", color: "#f87171" };
+    };
+  }, [benchmarkData]);
+
   // Overview: per-player change sorted best → worst
   const changeData = useMemo(() => {
     return playerComparisons
@@ -548,7 +567,7 @@ export default function Analytics() {
                       <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Group</th>
                       <th className="px-4 py-3 text-right text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">First</th>
                       <th className="px-4 py-3 text-right text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Latest</th>
-                      <th className="px-4 py-3 text-right text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Tier</th>
+                      <th className="px-4 py-3 text-right text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Band</th>
                       <th className="px-4 py-3 text-right text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Change</th>
                     </tr>
                   </thead>
@@ -568,7 +587,7 @@ export default function Analytics() {
                           </td>
                           <td className="px-4 py-2.5 text-right font-time text-muted-foreground">{first ? formatBroncho(first.bronco_mins) : <span className="text-muted-foreground/50">—</span>}</td>
                           <td className="px-4 py-2.5 text-right font-time text-foreground">{latest ? formatBroncho(latest.bronco_mins) : <span className="text-muted-foreground/50">—</span>}</td>
-                          <td className="px-4 py-2.5 text-right"><TierBadge bronco={latest?.bronco_mins ?? null} /></td>
+                          <td className="px-4 py-2.5 text-right">{(() => { const b = getTeamBand(latest?.bronco_mins ?? null); return b ? <span className="inline-block px-2 py-0.5 rounded-full text-[11px] font-semibold" style={{ backgroundColor: b.color + "20", color: b.color }}>{b.label}</span> : <span className="text-muted-foreground/50">—</span>; })()}</td>
                           <td className="px-4 py-2.5 text-right"><ChangeBadge diffSecs={diffSecs} /></td>
                         </tr>
                       ))}

@@ -1,11 +1,11 @@
 import { useEffect, useState, useCallback } from "react";
 import { useParams, useLocation } from "wouter";
-import { fetchPlayer, fetchResultsByPlayer, updatePlayer } from "@/lib/queries";
+import { fetchPlayer, fetchResultsByPlayer, updatePlayer, fetchAllResults, fetchPlayerRecentSessions } from "@/lib/queries";
 import { formatBroncho, positionColor, ageRangeColor, cn } from "@/lib/utils";
 import { MasBadge } from "@/components/MasBadge";
 import { ChartSkeleton, TableSkeleton, Skeleton } from "@/components/Skeleton";
 import { EmptyState } from "@/components/EmptyState";
-import type { Player, TestResult } from "@/lib/types";
+import type { Player, TestResult, SessionRPE, TrainingSession, SessionType } from "@/lib/types";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { ArrowLeft, Edit, Save, X, Timer, Dumbbell, ChevronLeft, ChevronRight } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -24,19 +24,42 @@ export default function PlayerDetail() {
   const { toast } = useToast();
   const [player, setPlayer] = useState<Player | null>(null);
   const [results, setResults] = useState<(TestResult & { test_sessions?: { test_date: string; test_name: string; type: string | null } })[]>([]);
+  const [recentLoad, setRecentLoad] = useState<(SessionRPE & { sessions: TrainingSession })[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [editForm, setEditForm] = useState<Partial<Player>>({});
   const [saving, setSaving] = useState(false);
   const [historyPage, setHistoryPage] = useState(0);
+  const [teamBand, setTeamBand] = useState<{ label: string; color: string } | null>(null);
   const HISTORY_PAGE_SIZE = 10;
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [p, rs] = await Promise.all([fetchPlayer(id!), fetchResultsByPlayer(id!)]);
+      const [p, rs, allRs, loadHistory] = await Promise.all([fetchPlayer(id!), fetchResultsByPlayer(id!), fetchAllResults(), fetchPlayerRecentSessions(id!, 5)]);
       setPlayer(p);
       setResults(rs as (TestResult & { test_sessions?: { test_date: string; test_name: string; type: string | null } })[]);
+      setRecentLoad(loadHistory as (SessionRPE & { sessions: TrainingSession })[]);
+
+      // Calculate team percentile
+      const teamLatest = new Map<string, number>();
+      for (const r of (allRs as (TestResult & { players?: { team: string } })[]).filter(r => r.players?.team === p?.team && r.bronco_mins !== null)) {
+        if (!teamLatest.has(r.player_id)) teamLatest.set(r.player_id, r.bronco_mins!);
+      }
+      const sorted = Array.from(teamLatest.values()).sort((a, b) => a - b);
+      const playerBronco = (rs as TestResult[])[0]?.bronco_mins;
+      if (playerBronco != null && sorted.length > 0) {
+        const calcQ = (arr: number[], p: number) => {
+          const idx = (p / 100) * (arr.length - 1);
+          const lo = Math.floor(idx), hi = Math.ceil(idx);
+          return arr[lo] + (idx - lo) * ((arr[hi] ?? arr[lo]) - arr[lo]);
+        };
+        const q1 = calcQ(sorted, 25), q2 = calcQ(sorted, 50), q3 = calcQ(sorted, 75);
+        if (playerBronco <= q1)      setTeamBand({ label: "Top 25%",    color: "#34d399" });
+        else if (playerBronco <= q2) setTeamBand({ label: "Upper Mid",  color: "#60a5fa" });
+        else if (playerBronco <= q3) setTeamBand({ label: "Lower Mid",  color: "#fbbf24" });
+        else                         setTeamBand({ label: "Bottom 25%", color: "#f87171" });
+      }
     } finally {
       setLoading(false);
     }
@@ -69,12 +92,14 @@ export default function PlayerDetail() {
 
   const latestResult = results[0];
 
-  const chartData = [...results].reverse().map((r) => ({
-    date: r.test_sessions?.test_date ?? "",
-    session: r.test_sessions?.test_name ?? "",
-    mins: r.bronco_mins,
-    display: formatBroncho(r.bronco_mins),
-  }));
+  const chartData = [...results]
+    .sort((a, b) => (a.test_sessions?.test_date ?? "").localeCompare(b.test_sessions?.test_date ?? ""))
+    .map((r) => ({
+      date: r.test_sessions?.test_date ?? "",
+      session: r.test_sessions?.test_name ?? "",
+      mins: r.bronco_mins,
+      display: formatBroncho(r.bronco_mins),
+    }));
 
   if (loading) {
     return (
@@ -199,8 +224,11 @@ export default function PlayerDetail() {
                 </div>
               ))}
               <div className="sm:col-span-4 flex items-center gap-2">
-                <span className="text-xs text-muted-foreground">Latest tier:</span>
-                <MasBadge mas={latestResult?.mas_ms ?? null} />
+                <span className="text-xs text-muted-foreground">Team band:</span>
+                {teamBand
+                  ? <span className="inline-block px-2 py-0.5 rounded-full text-[11px] font-semibold" style={{ backgroundColor: teamBand.color + "20", color: teamBand.color }}>{teamBand.label}</span>
+                  : <span className="text-xs text-muted-foreground">—</span>
+                }
               </div>
             </div>
           );
@@ -213,10 +241,10 @@ export default function PlayerDetail() {
         {chartData.length === 0 ? (
           <EmptyState icon={Timer} title="No test history" description="This player hasn't been tested yet" />
         ) : (
-          <ResponsiveContainer width="100%" height={200}>
-            <LineChart data={chartData} margin={{ top: 4, right: 8, bottom: 4, left: 0 }}>
+          <ResponsiveContainer width="100%" height={220}>
+            <LineChart data={chartData} margin={{ top: 4, right: 8, bottom: 40, left: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#222" />
-              <XAxis dataKey="date" tick={{ fill: "#9CA3AF", fontSize: 11 }} />
+              <XAxis dataKey="session" tick={{ fill: "#9CA3AF", fontSize: 10 }} angle={-35} textAnchor="end" interval={0} />
               <YAxis tickFormatter={(v) => formatBroncho(v)} domain={["auto", "auto"]} tick={{ fill: "#9CA3AF", fontSize: 11 }} />
               <Tooltip
                 contentStyle={{ background: "#111", border: "1px solid #222", borderRadius: 6 }}
@@ -228,6 +256,61 @@ export default function PlayerDetail() {
           </ResponsiveContainer>
         )}
       </div>
+
+      {/* Recent training load */}
+      {(() => {
+        const SESSION_TYPE_CFG: Record<SessionType, { text: string; bg: string }> = {
+          Training: { text: "text-indigo-400", bg: "bg-indigo-500/15" },
+          Match:    { text: "text-amber-400",  bg: "bg-amber-500/15"  },
+          Gym:      { text: "text-emerald-400",bg: "bg-emerald-500/15"},
+          Recovery: { text: "text-slate-400",  bg: "bg-slate-500/15"  },
+        };
+        return (
+          <div className="bg-card border border-border rounded-lg">
+            <div className="px-4 py-3 border-b border-border flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-foreground">Recent Load</h2>
+              <span className="text-xs text-muted-foreground">Last 5 sessions</span>
+            </div>
+            {recentLoad.length === 0 ? (
+              <div className="py-8 text-center">
+                <p className="text-sm text-muted-foreground">No sessions logged yet</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-border text-xs text-muted-foreground">
+                      <th className="px-4 py-2.5 text-left font-medium">Date</th>
+                      <th className="px-4 py-2.5 text-left font-medium">Type</th>
+                      <th className="px-4 py-2.5 text-right font-medium">RPE</th>
+                      <th className="px-4 py-2.5 text-right font-medium">Load (AU)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {recentLoad.map((r) => {
+                      const st = r.sessions?.session_type as SessionType;
+                      const cfg = SESSION_TYPE_CFG[st] ?? SESSION_TYPE_CFG.Training;
+                      const dateStr = r.sessions?.date
+                        ? new Date(r.sessions.date + "T00:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })
+                        : "—";
+                      return (
+                        <tr key={r.id} className="border-b border-border/50 hover:bg-muted/30">
+                          <td className="px-4 py-2.5 text-muted-foreground font-time text-xs">{dateStr}</td>
+                          <td className="px-4 py-2.5">
+                            <span className={cn("inline-flex items-center px-2 py-0.5 rounded text-xs font-medium", cfg.bg, cfg.text)}>{st}</span>
+                          </td>
+                          <td className="px-4 py-2.5 text-right font-time text-foreground">{r.rpe.toFixed(1)}</td>
+                          <td className="px-4 py-2.5 text-right font-bold font-time text-amber-400">{Math.round(r.load_au)}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Full test history with pagination */}
       <div className="bg-card border border-border rounded-lg">

@@ -93,3 +93,28 @@ export const BRONCHO_TIERS: BronchoTier[] = [
 export function getBronchoTier(broncoMins: number): BronchoTier {
   return BRONCHO_TIERS.find((t) => broncoMins >= t.minMins && broncoMins < t.maxMins) ?? BRONCHO_TIERS[BRONCHO_TIERS.length - 1];
 }
+
+// ── Session & RPE types ───────────────────────────────────────────────────────
+export type SessionType = "Training" | "Match" | "Gym" | "Recovery";
+
+export interface TrainingSession {
+  id: string;
+  date: string;           // ISO date string "2026-04-10"
+  day: string;            // "Monday"
+  session_type: SessionType;
+  duration_mins: number;
+  planned_rpe: number;
+  planned_load_au: number;
+  notes: string | null;
+  created_at: string;
+}
+
+export interface SessionRPE {
+  id: string;
+  session_id: string;
+  player_id: string;
+  rpe: number;
+  load_au: number;
+  notes: string | null;
+  created_at: string;
+}

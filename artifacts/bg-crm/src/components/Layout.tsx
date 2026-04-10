@@ -7,6 +7,7 @@ import { useTheme } from "@/context/ThemeContext";
 const navItems = [
   { href: "/", label: "Dashboard" },
   { href: "/players", label: "Players" },
+  { href: "/sessions", label: "Sessions" },
   { href: "/fitness", label: "Fitness Tests" },
   { href: "/analytics", label: "Analytics" },
 ];

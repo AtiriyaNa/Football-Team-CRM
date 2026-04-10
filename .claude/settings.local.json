@@ -7,7 +7,9 @@
       "Bash(ls /home/runner/workspace/tsconfig*.json)",
       "Bash(echo \"EXIT: $?\")",
       "Bash(grep -E \"\\\\.\\(ts|sql\\)$\")",
-      "Bash(grep -E \"\\\\.\\(ts|tsx\\)$\")"
+      "Bash(grep -E \"\\\\.\\(ts|tsx\\)$\")",
+      "Bash(echo \"EXIT:$?\")",
+      "Bash(npm run:*)"
     ]
   }
 }

@@ -1,5 +1,5 @@
 import { supabase } from "./supabase";
-import type { Player, TestSession, TestResult } from "./types";
+import type { Player, TestSession, TestResult, TrainingSession, SessionRPE } from "./types";
 
 // Players
 export async function fetchPlayers(team?: string): Promise<Player[]> {
@@ -182,4 +182,83 @@ export async function fetchTeamAvgBroncho(team: string): Promise<TeamAvgBroncho[
     }
   }
   return results;
+}
+
+// ── Training Sessions ─────────────────────────────────────────────────────────
+export async function fetchTrainingSessions(): Promise<TrainingSession[]> {
+  const { data, error } = await supabase
+    .from("sessions")
+    .select("*")
+    .order("date", { ascending: false });
+  if (error) throw error;
+  return data as TrainingSession[];
+}
+
+export async function fetchTrainingSession(id: string): Promise<TrainingSession> {
+  const { data, error } = await supabase
+    .from("sessions")
+    .select("*")
+    .eq("id", id)
+    .single();
+  if (error) throw error;
+  return data as TrainingSession;
+}
+
+export async function createTrainingSession(
+  session: Omit<TrainingSession, "id" | "day" | "planned_load_au" | "created_at">
+): Promise<TrainingSession> {
+  const { data, error } = await supabase
+    .from("sessions")
+    .insert(session)
+    .select()
+    .single();
+  if (error) throw error;
+  return data as TrainingSession;
+}
+
+// ── Session RPE ───────────────────────────────────────────────────────────────
+export async function fetchSessionRPEWithPlayers(
+  sessionId: string
+): Promise<(SessionRPE & { players: Player })[]> {
+  const { data, error } = await supabase
+    .from("session_rpe")
+    .select("*, players(*)")
+    .eq("session_id", sessionId);
+  if (error) throw error;
+  return data as (SessionRPE & { players: Player })[];
+}
+
+export async function fetchLoggedPlayerIds(sessionId: string): Promise<string[]> {
+  const { data, error } = await supabase
+    .from("session_rpe")
+    .select("player_id")
+    .eq("session_id", sessionId);
+  if (error) throw error;
+  return (data ?? []).map((r: { player_id: string }) => r.player_id);
+}
+
+export async function insertSessionRPE(
+  entry: Omit<SessionRPE, "id" | "load_au" | "created_at">
+): Promise<SessionRPE> {
+  const { data, error } = await supabase
+    .from("session_rpe")
+    .insert(entry)
+    .select()
+    .single();
+  if (error) throw error;
+  return data as SessionRPE;
+}
+
+export async function fetchPlayerRecentSessions(
+  playerId: string,
+  limit = 5
+): Promise<(SessionRPE & { sessions: TrainingSession })[]> {
+  const { data, error } = await supabase
+    .from("session_rpe")
+    .select("*, sessions(*)")
+    .eq("player_id", playerId)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return data as (SessionRPE & { sessions: TrainingSession })[];
 }

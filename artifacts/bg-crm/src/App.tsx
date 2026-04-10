@@ -10,6 +10,9 @@ import Players from "@/pages/Players";
 import PlayerDetail from "@/pages/PlayerDetail";
 import FitnessTests from "@/pages/FitnessTests";
 import Analytics from "@/pages/Analytics";
+import Sessions from "@/pages/Sessions";
+import SessionRPE from "@/pages/SessionRPE";
+import SessionDetail from "@/pages/SessionDetail";
 import NotFound from "@/pages/not-found";
 
 const queryClient = new QueryClient();
@@ -21,6 +24,9 @@ function Router() {
         <Route path="/" component={Dashboard} />
         <Route path="/players" component={Players} />
         <Route path="/players/:id" component={PlayerDetail} />
+        <Route path="/sessions" component={Sessions} />
+        <Route path="/sessions/:id/rpe" component={SessionRPE} />
+        <Route path="/sessions/:id" component={SessionDetail} />
         <Route path="/fitness" component={FitnessTests} />
         <Route path="/analytics" component={Analytics} />
         <Route component={NotFound} />
