@@ -19,8 +19,13 @@ const SECONDARY_POSITIONS: Record<string, string[]> = {
 };
 const AGE_RANGES = ["U18", "18-24", "25+"];
 
+function generateCode(name: string): string {
+  return name.trim().toUpperCase().replace(/\s+/g, "_");
+}
+
 function AddPlayerModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
   const { toast } = useToast();
+  const { team: currentTeam } = useTeam();
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
     name: "",
@@ -28,22 +33,27 @@ function AddPlayerModal({ onClose, onSaved }: { onClose: () => void; onSaved: ()
     primary_position: "Goalkeeper",
     secondary_position: "",
     year_of_birth: "",
-    team: "Sharks" as "Sharks" | "Wildcats",
+    team: currentTeam as "Sharks" | "Wildcats",
     is_active: true,
   });
 
+  const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const name = e.target.value;
+    setForm((prev) => ({ ...prev, name, code: generateCode(name) }));
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.name || !form.code) {
-      toast({ title: "Name and Code are required", variant: "destructive" });
+    if (!form.name.trim()) {
+      toast({ title: "Player name is required", variant: "destructive" });
       return;
     }
     setSaving(true);
     try {
       const yob = form.year_of_birth ? parseInt(form.year_of_birth) : null;
       await createPlayer({
-        name: form.name,
-        code: form.code,
+        name: form.name.trim(),
+        code: generateCode(form.name),
         primary_position: form.primary_position,
         secondary_position: form.secondary_position || null,
         year_of_birth: yob,
@@ -56,7 +66,11 @@ function AddPlayerModal({ onClose, onSaved }: { onClose: () => void; onSaved: ()
       onSaved();
       onClose();
     } catch (err: unknown) {
-      toast({ title: "Failed to add player", description: String(err), variant: "destructive" });
+      const msg =
+        err && typeof err === "object" && "message" in err
+          ? String((err as { message: unknown }).message)
+          : String(err);
+      toast({ title: "Failed to add player", description: msg, variant: "destructive" });
     } finally {
       setSaving(false);
     }
@@ -69,14 +83,7 @@ function AddPlayerModal({ onClose, onSaved }: { onClose: () => void; onSaved: ()
     </div>
   );
 
-  const input = (key: keyof typeof form, props: React.InputHTMLAttributes<HTMLInputElement> & { "data-testid"?: string } = {}) => (
-    <input
-      {...props}
-      value={String(form[key])}
-      onChange={(e) => setForm({ ...form, [key]: e.target.value })}
-      className="w-full bg-muted border border-border rounded-md px-3 py-1.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-    />
-  );
+  const inputCls = "w-full bg-muted border border-border rounded-md px-3 py-1.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary";
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm" data-testid="add-player-modal">
@@ -87,8 +94,24 @@ function AddPlayerModal({ onClose, onSaved }: { onClose: () => void; onSaved: ()
         </div>
         <form onSubmit={handleSubmit} className="px-5 py-4 space-y-3">
           <div className="grid grid-cols-2 gap-3">
-            {field("Name *", input("name", { placeholder: "Full name", "data-testid": "input-player-name" }))}
-            {field("Code *", input("code", { placeholder: "e.g. P001", "data-testid": "input-player-code" }))}
+            {field("Name *", (
+              <input
+                value={form.name}
+                onChange={handleNameChange}
+                placeholder="Full name"
+                data-testid="input-player-name"
+                className={inputCls}
+              />
+            ))}
+            {field("Code (auto-generated)", (
+              <input
+                value={form.code}
+                readOnly
+                data-testid="input-player-code"
+                className={`${inputCls} opacity-60 cursor-not-allowed select-all`}
+                tabIndex={-1}
+              />
+            ))}
           </div>
           <div className="grid grid-cols-2 gap-3">
             {field("Primary Position", (
@@ -113,7 +136,16 @@ function AddPlayerModal({ onClose, onSaved }: { onClose: () => void; onSaved: ()
             ))}
           </div>
           <div className="grid grid-cols-2 gap-3">
-            {field("Year of Birth", input("year_of_birth", { type: "number", placeholder: "e.g. 2003", "data-testid": "input-year-of-birth" }))}
+            {field("Year of Birth", (
+              <input
+                type="number"
+                value={form.year_of_birth}
+                onChange={(e) => setForm({ ...form, year_of_birth: e.target.value })}
+                placeholder="e.g. 2003"
+                data-testid="input-year-of-birth"
+                className={inputCls}
+              />
+            ))}
             {field("Team", (
               <select
                 value={form.team}

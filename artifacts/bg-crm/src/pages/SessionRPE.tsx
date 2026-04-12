@@ -36,6 +36,33 @@ function formatDate(iso: string) {
 
 const RPE_NUMBERS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 
+const RPE_LABELS: Record<number, string> = {
+  1:  "Nothing",
+  2:  "Very Easy",
+  3:  "Easy",
+  4:  "Comfortable",
+  5:  "Smwht Hard",
+  6:  "Difficult",
+  7:  "Hard",
+  8:  "Very Hard",
+  9:  "Extr. Hard",
+  10: "Max",
+};
+
+// Green → Yellow → Red across 1–10
+const RPE_COLORS: Record<number, string> = {
+  1:  "hsl(142,76%,45%)",
+  2:  "hsl(116,60%,43%)",
+  3:  "hsl(90,60%,40%)",
+  4:  "hsl(60,80%,42%)",
+  5:  "hsl(45,90%,48%)",
+  6:  "hsl(30,90%,50%)",
+  7:  "hsl(18,92%,50%)",
+  8:  "hsl(8,92%,50%)",
+  9:  "hsl(4,90%,45%)",
+  10: "hsl(0,88%,38%)",
+};
+
 export default function SessionRPE() {
   const { id } = useParams<{ id: string }>();
   const [, setLocation] = useLocation();
@@ -253,23 +280,43 @@ export default function SessionRPE() {
         <div>
           <label className="block text-xs text-muted-foreground mb-2">RPE (Rate of Perceived Exertion)</label>
           <div className="grid grid-cols-5 gap-2">
-            {RPE_NUMBERS.map((n) => (
-              <button
-                key={n}
-                type="button"
-                onClick={() => setSelectedRPE(selectedRPE === n ? null : n)}
-                className={cn(
-                  "rounded-xl font-bold text-2xl transition-all duration-100 border select-none",
-                  "active:scale-95",
-                  selectedRPE === n
-                    ? "bg-indigo-600 text-white border-indigo-500 shadow-lg"
-                    : "bg-card border-border text-foreground hover:border-indigo-500/50 hover:bg-indigo-500/10"
-                )}
-                style={{ height: 72, minWidth: 0 }}
-              >
-                {n}
-              </button>
-            ))}
+            {RPE_NUMBERS.map((n) => {
+              const color = RPE_COLORS[n];
+              const isSelected = selectedRPE === n;
+              return (
+                <button
+                  key={n}
+                  type="button"
+                  onClick={() => setSelectedRPE(isSelected ? null : n)}
+                  className={cn(
+                    "rounded-xl font-bold transition-all duration-100 border select-none flex flex-col items-center justify-center gap-0.5",
+                    "active:scale-95",
+                    isSelected
+                      ? "shadow-lg border-2"
+                      : "bg-card border-border text-foreground hover:bg-white/5"
+                  )}
+                  style={{
+                    height: 80,
+                    minWidth: 0,
+                    borderColor: isSelected ? color : undefined,
+                    backgroundColor: isSelected ? `${color}22` : undefined,
+                  }}
+                >
+                  <span
+                    className="text-2xl font-bold leading-none"
+                    style={{ color: isSelected ? color : color }}
+                  >
+                    {n}
+                  </span>
+                  <span
+                    className="text-center leading-none font-normal"
+                    style={{ fontSize: 8, color, opacity: isSelected ? 1 : 0.75 }}
+                  >
+                    {RPE_LABELS[n]}
+                  </span>
+                </button>
+              );
+            })}
           </div>
         </div>
 

@@ -17,7 +17,11 @@ export async function fetchPlayer(id: string): Promise<Player | null> {
 }
 
 export async function createPlayer(player: Omit<Player, "id" | "created_at">): Promise<Player> {
-  const { data, error } = await supabase.from("players").insert(player).select().single();
+  const { data, error } = await supabase
+    .from("players")
+    .insert({ id: crypto.randomUUID(), ...player })
+    .select()
+    .single();
   if (error) throw error;
   return data as Player;
 }
